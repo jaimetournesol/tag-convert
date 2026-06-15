@@ -1,7 +1,10 @@
 # secrets & session
 .env
+.env.*
+!.env.example
 .bridge.env
 .tag-convert/
+dev-envs/
 *.token
 
 # node / python
