@@ -1,0 +1,4 @@
+# Add your project's runtime deps here. The bare MCP server needs nothing
+# beyond the Python stdlib. Example:
+# httpx
+# beautifulsoup4

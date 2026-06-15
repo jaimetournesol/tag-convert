@@ -1,0 +1,11 @@
+{
+  "name": "tag-project-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local MCP server wrapping this project's tools, bridged to TAG.",
+  "scripts": {
+    "start": "node server.mjs",
+    "bridge": "./run-bridge.sh"
+  }
+}

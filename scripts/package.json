@@ -1,0 +1,9 @@
+{
+  "name": "tag-convert-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency-free TAG API client used by the tag-convert plugin.",
+  "bin": { "tag": "./tag.mjs" },
+  "engines": { "node": ">=18" }
+}

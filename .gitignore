@@ -1,0 +1,17 @@
+# secrets & session
+.env
+.bridge.env
+.tag-convert/
+*.token
+
+# node / python
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# workspace artifacts created by MCP file tools
+workspace/
+
+# os
+.DS_Store
