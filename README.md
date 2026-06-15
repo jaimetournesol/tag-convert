@@ -35,19 +35,21 @@ The CLI needs no install — it's plain Node 18+:
 node /path/to/tag-convert/scripts/tag.mjs help
 ```
 
-## Configure (hosted by default)
+## Configure
 
-Create a `.env` in the directory you run from:
+Point it at your TAG instance and authenticate. Create a `.env` in the
+directory you run from (your TAG operator provides the API + relay URLs):
 
 ```bash
+# Target instance (required) — ask your TAG operator for these:
+TAG_API_URL=https://your-tag-api.example.com
+TAG_RELAY_URL=https://your-tag-relay.example.com
+
+# Auth:
 TAG_EMAIL=you@example.com
 TAG_PASSWORD=...
 # or, instead of email/password:
 # TAG_TOKEN=<a TAG session JWT>
-
-# Defaults point at the hosted instance; override for another:
-# TAG_API_URL=https://tag-api.gentledesert-d3828315.westeurope.azurecontainerapps.io
-# TAG_RELAY_URL=https://tag-mcp-relay.gentledesert-d3828315.westeurope.azurecontainerapps.io
 ```
 
 Then: `node scripts/tag.mjs login && node scripts/tag.mjs whoami`.

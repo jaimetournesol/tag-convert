@@ -4,8 +4,8 @@
  * project into a TAG workflow. Node 18+ (uses global fetch + web streams).
  *
  * Config (env, or a `.env` file in the cwd, or flags):
- *   TAG_API_URL    default https://tag-api.gentledesert-d3828315.westeurope.azurecontainerapps.io
- *   TAG_RELAY_URL  default https://tag-mcp-relay.gentledesert-d3828315.westeurope.azurecontainerapps.io
+ *   TAG_API_URL    your TAG API base URL, e.g. https://your-tag-api.example.com  (required)
+ *   TAG_RELAY_URL  your TAG relay base URL, e.g. https://your-tag-relay.example.com  (required for the bridge)
  *   TAG_EMAIL / TAG_PASSWORD   (used by `login`)
  *   TAG_TOKEN      a pre-minted session JWT (skips login)
  *
@@ -34,10 +34,9 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-const DEFAULTS = {
-  TAG_API_URL: 'https://tag-api.gentledesert-d3828315.westeurope.azurecontainerapps.io',
-  TAG_RELAY_URL: 'https://tag-mcp-relay.gentledesert-d3828315.westeurope.azurecontainerapps.io',
-};
+// TAG_API_URL + TAG_RELAY_URL are required — set them in env or a .env file
+// (your TAG operator provides the values for your instance).
+const DEFAULTS = {};
 const SESSION_FILE = join(process.cwd(), '.tag-convert', 'session.json');
 
 // ── tiny .env loader (no deps) ────────────────────────────────────────────
@@ -86,6 +85,7 @@ function decodeJwt(t) {
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
 async function api(method, path, { token, body } = {}) {
+  if (!API) throw new Error('Set TAG_API_URL (env or .env), e.g. https://your-tag-api.example.com');
   const res = await fetch(`${API}${path}`, {
     method,
     headers: {
@@ -177,7 +177,9 @@ const cmds = {
     const r = await api('POST', '/api/me/relay-bridge-token', { token: s.token });
     console.log(`token (expires ${r.expiresAt}):\n${r.token}`);
     if (args.write) {
-      writeFileSync(args.write, `TAG_BRIDGE_TOKEN=${r.token}\nTAG_RELAY_URL=${cfg('TAG_RELAY_URL')}\n`);
+      const relay = cfg('TAG_RELAY_URL');
+      if (!relay) throw new Error('Set TAG_RELAY_URL before --write (your TAG relay base URL).');
+      writeFileSync(args.write, `TAG_BRIDGE_TOKEN=${r.token}\nTAG_RELAY_URL=${relay}\n`);
       console.log(`\nwrote ${args.write}`);
     }
   },

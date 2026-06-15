@@ -7,7 +7,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 [ -f "$DIR/.bridge.env" ] && set -a && . "$DIR/.bridge.env" && set +a
 
-: "${TAG_RELAY_URL:=https://tag-mcp-relay.gentledesert-d3828315.westeurope.azurecontainerapps.io}"
+if [ -z "${TAG_RELAY_URL:-}" ]; then echo "Set TAG_RELAY_URL (your TAG relay base URL), e.g. in .bridge.env" >&2; exit 1; fi
 : "${TAG_WORKSPACE_ROOT:=$DIR/workspace}"
 : "${PROJECT_DIR:=$DIR}"
 PY="${PYTHON:-$DIR/.venv/bin/python}"
