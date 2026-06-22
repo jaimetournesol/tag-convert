@@ -97,7 +97,7 @@ async function api(method, path, { token, body } = {}) {
   const res = await fetch(`${API}${path}`, {
     method,
     headers: {
-      'content-type': 'application/json',
+      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
