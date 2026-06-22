@@ -19,10 +19,23 @@ if [ -z "${TAG_BRIDGE_TOKEN:-}" ]; then
   exit 1
 fi
 
+# On Windows (Git Bash / MSYS / Cygwin) the spawned interpreter is a native
+# Windows binary and cannot resolve POSIX paths like /c/Users/...  Translate to
+# native (mixed, forward-slash) form when cygpath is present; no-op elsewhere.
+SRV="$DIR/server.py"
+PYPATH="$DIR"
+if command -v cygpath >/dev/null 2>&1; then
+  SRV="$(cygpath -m "$SRV")"
+  PYPATH="$(cygpath -m "$PYPATH")"
+  TAG_WORKSPACE_ROOT="$(cygpath -m "$TAG_WORKSPACE_ROOT")"
+  PROJECT_DIR="$(cygpath -m "$PROJECT_DIR")"
+  [ -f "$PY" ] && PY="$(cygpath -m "$PY")"
+fi
+
 exec tag-mcp-bridge \
   --relay="$TAG_RELAY_URL" \
   --token="$TAG_BRIDGE_TOKEN" \
-  --mcp-cmd="$PY $DIR/server.py" \
-  --mcp-env "PYTHONPATH=$DIR" \
+  --mcp-cmd="$PY $SRV" \
+  --mcp-env "PYTHONPATH=$PYPATH" \
   --mcp-env "TAG_WORKSPACE_ROOT=$TAG_WORKSPACE_ROOT" \
   --mcp-env "PROJECT_DIR=$PROJECT_DIR"
