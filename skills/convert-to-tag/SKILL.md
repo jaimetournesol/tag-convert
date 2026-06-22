@@ -116,6 +116,12 @@ Write `graph.json` following the plan from Phase 1 and `NODES.md`. Principles:
   tools** and describes the **structured input** it receives.
 - For an agent that should only use some tools, set
   `capabilityToolFilters: { "<cap-id>": ["tool_a","tool_b"] }`.
+- If two or more agents must **exchange whole files** (writer → editor,
+  planner → executor), set `enableWorkspace: true` on each of those agents:
+  they share one run-scoped filesystem with built-in `read_file` / `write_file`
+  / `edit_file` / `list_files` / `glob` / `grep` / `move_file` / `delete_file`
+  tools. Use this instead of `memory-*` when passing files/artifacts rather
+  than a single value (`NODES.md` → "Multi-agent shared workspace").
 - `branch`/`transform` expressions: the value is an object — coerce with
   `$string($)` or reach into a field (`JSONATA.md`).
 - End on an observable terminal (`format-output` / `log` / `chat-response`).

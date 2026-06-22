@@ -48,6 +48,16 @@ Use it **only** where the task is irreducibly dynamic:
 - judgment / classification / planning that you cannot pre-script,
 - dynamic tool orchestration (it decides *which* tools to call and *when*).
 
+When **two or more agents need to exchange whole files** (a writer produces a
+draft, an editor refines it; a planner emits files, an executor consumes
+them), turn on the **shared run workspace** — set `"enableWorkspace": true` on
+each of those agent nodes. They then share one run-scoped filesystem with a
+Claude-Code-style toolkit (`read_file` / `write_file` / `edit_file` /
+`list_files` / `glob` / `grep` / `move_file` / `delete_file`). Reach for this
+instead of `memory-write` / `memory-read` when the thing being passed is FILES
+or multiple artifacts rather than a single value. (See `NODES.md` →
+"Multi-agent shared workspace".)
+
 ### The rule
 > **Push everything deterministic OUT of the agent into observable nodes.
 > Reserve the agent for the small, genuinely dynamic core.**

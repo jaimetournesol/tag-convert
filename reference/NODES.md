@@ -53,6 +53,12 @@ Edges connect ports:
   - `capabilityIds`: `[capId, …]` — the capabilities (MCP tools) it can use.
   - `capabilityToolFilters`: `{ capId: ["tool_a","tool_b"] }` — per-agent tool
     allowlist; scope each agent to only the tools its job needs.
+  - `enableWorkspace`: `true` to give the agent a built-in **Claude-Code-style
+    file toolkit** (`read_file` with line ranges, `write_file`, `edit_file`,
+    `list_files`, `glob`, `grep`, `move_file`, `delete_file`) over a workspace
+    **shared by every agent node in the same run**. Set it on each agent that
+    should read or write the shared files. See "Multi-agent shared workspace"
+    below. Default `false`.
   - Inputs: `prompt` (the user message), `context`. Outputs: `text`,
     `toolCalls`, `tokensUsed`, `costUsd`.
 
@@ -81,6 +87,44 @@ Edges connect ports:
   "edges": [
     { "id": "e1", "source": "in", "target": "agent", "sourceHandle": "output", "targetHandle": "prompt" },
     { "id": "e2", "source": "agent", "target": "out", "sourceHandle": "text", "targetHandle": "input" }
+  ]
+}
+```
+
+## Multi-agent shared workspace — pass files between agents
+
+When a workflow has **several agents that need to exchange whole files or
+directories** (not just a single string), set `"enableWorkspace": true` on
+**every** agent node that should touch the shared files. Each such agent gets
+the Claude-Code-style file toolkit over **one workspace scoped to the run** —
+so a producer can `write_file` and a later agent can `glob` / `grep` /
+`read_file` / `edit_file` the very same paths. The workspace is isolated per
+run and wiped when the run ends.
+
+Prefer this over `memory-write` / `memory-read` whenever agents pass FILES or
+multiple artifacts. Still wire the normal `text` → `prompt` edge so the
+consumer agent runs *after* the producer and knows what to look for.
+
+```json
+{
+  "nodes": [
+    { "id": "in", "type": "input", "label": "Input", "config": { "data": {} } },
+    { "id": "writer", "type": "claude-sdk", "label": "Writer", "config": {
+        "configMode": "inline", "model": "claude-sonnet-4-6", "maxTurns": 12,
+        "enableWorkspace": true,
+        "systemPrompt": "Write your draft to docs/report.md using write_file, then summarize what you wrote."
+    } },
+    { "id": "editor", "type": "claude-sdk", "label": "Editor", "config": {
+        "configMode": "inline", "model": "claude-sonnet-4-6", "maxTurns": 12,
+        "enableWorkspace": true,
+        "systemPrompt": "Use glob/grep/read_file to find the draft under docs/, then edit_file to tighten it. Report the final path."
+    } },
+    { "id": "out", "type": "log", "label": "Result", "config": { "message": "Result:", "saveArtifact": true } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "in", "target": "writer", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e2", "source": "writer", "target": "editor", "sourceHandle": "text", "targetHandle": "prompt" },
+    { "id": "e3", "source": "editor", "target": "out", "sourceHandle": "text", "targetHandle": "input" }
   ]
 }
 ```
