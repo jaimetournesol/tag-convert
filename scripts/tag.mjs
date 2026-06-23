@@ -20,14 +20,22 @@
  *   capability:create --name N --slug S [--devId D] [--scope personal|org]
  *                                  create an mcp-server (relay) capability → prints its id
  *   capability:list                list capabilities visible to you
- *   workflow:create --name N --graph FILE [--project ID]   create a workflow → prints its id
+ *   project:list                   list projects you can use (id · slug · name)
+ *   project:create --name N [--slug S]                     find-or-create a project → prints its id
+ *   workflow:create --name N --graph FILE [--project SLUG|ID]
+ *                                  create a workflow IN A PROJECT → prints its id.
+ *                                  A workflow MUST belong to a project to be
+ *                                  visible in the TAG UI. Precedence: --project
+ *                                  (slug or id) → --project-name/--project-slug
+ *                                  (find-or-create) → default "tag-convert" bucket.
  *   workflow:save  --id ID --graph FILE [--comment C]      save a new version
  *   test-run --id ID [--input JSON|@file] [--graph FILE]   run + stream telemetry to the terminal
  *
  * Examples:
  *   node tag.mjs login
  *   node tag.mjs capability:create --name "My Project Tools" --slug my-project-tools
- *   node tag.mjs workflow:create --name "My Project" --graph graph.json
+ *   node tag.mjs project:list
+ *   node tag.mjs workflow:create --name "My Project" --graph graph.json --project my-project-slug
  *   node tag.mjs test-run --id <wf-id> --input '{"url":"https://example.com"}'
  */
 
@@ -166,6 +174,49 @@ function renderFrame(f) {
   return false;
 }
 
+// ── project resolution ─────────────────────────────────────────────────────
+// A workflow MUST belong to a project to be visible in the TAG UI — the UI is
+// project-scoped (every list/editor route lives under /p/:projectSlug/...), so
+// a workflow with projectId=null is created fine but never appears in any
+// project list and can't be opened. We therefore ALWAYS attach a project.
+function slugify(s) {
+  const out = String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+  return out || 'tag-convert';
+}
+const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
+
+async function listProjects(token) {
+  const r = await api('GET', '/api/projects', { token });
+  return Array.isArray(r) ? r : (r.rows || r.projects || r.data || []);
+}
+
+async function findOrCreateProject(token, { name, slug }) {
+  const want = slug || slugify(name);
+  const projects = await listProjects(token);
+  const hit = projects.find((p) => p.slug === want || (name && p.name === name));
+  if (hit) return hit;
+  return api('POST', '/api/projects', { token, body: { name: name || want, slug: want } });
+}
+
+// Resolve the project a workflow should land in. Precedence: explicit
+// --project (id or slug) → --project-name / --project-slug (find-or-create) →
+// a default "tag-convert" bucket (find-or-create) so output is never orphaned.
+async function resolveProjectId(token, args) {
+  if (args.project) {
+    if (isUuid(args.project)) return { id: args.project, how: 'id' };
+    const projects = await listProjects(token);
+    const hit = projects.find((p) => p.slug === args.project || p.id === args.project);
+    if (!hit) throw new Error(`--project "${args.project}" not found. Available slugs: ${projects.map((p) => p.slug).join(', ') || '(none)'}. Use project:list, or project:create --name N.`);
+    return { id: hit.id, how: 'slug', name: hit.name };
+  }
+  if (args['project-name'] || args['project-slug']) {
+    const p = await findOrCreateProject(token, { name: args['project-name'], slug: args['project-slug'] });
+    return { id: p.id, how: 'find-or-create', name: p.name };
+  }
+  const p = await findOrCreateProject(token, { name: 'TAG Convert', slug: 'tag-convert' });
+  return { id: p.id, how: 'default', name: p.name, isDefault: true };
+}
+
 // ── commands ──────────────────────────────────────────────────────────────
 const cmds = {
   async login() { const s = await login(); console.log(`Logged in as ${s.email} (userId/devId ${s.userId}, org ${s.orgId})`); },
@@ -217,15 +268,37 @@ const cmds = {
     for (const c of rows) console.log(`${c.id}  ${c.kind.padEnd(12)} ${c.name}`);
   },
 
+  async ['project:list']() {
+    const s = await session();
+    const projects = await listProjects(s.token);
+    if (!projects.length) { console.log('(no projects — create one with: project:create --name "My Project")'); return; }
+    for (const p of projects) console.log(`${p.id}  ${String(p.slug).padEnd(24)} ${p.name}`);
+  },
+
+  async ['project:create'](args) {
+    const s = await session();
+    if (!args.name) throw new Error('--name is required (optional: --slug)');
+    const p = await findOrCreateProject(s.token, { name: args.name, slug: args.slug });
+    console.log(`project ready: ${p.id}  (slug ${p.slug})`);
+    console.log(p.id);
+  },
+
   async ['workflow:create'](args) {
     const s = await session();
     if (!args.name || !args.graph) throw new Error('--name and --graph FILE are required');
     const graph = JSON.parse(readFileSync(args.graph, 'utf8'));
+    // ALWAYS attach a project — a project-less workflow is invisible in the
+    // project-scoped TAG UI (can't be listed or opened). See resolveProjectId.
+    const proj = await resolveProjectId(s.token, args);
     const r = await api('POST', '/api/workflows', {
       token: s.token,
-      body: { name: args.name, ...(args.project ? { projectId: args.project } : {}), graph },
+      body: { name: args.name, projectId: proj.id, graph },
     });
-    console.log(`workflow created: ${r.id} (v${r.currentVersion?.version ?? 1})`);
+    if (proj.isDefault) {
+      console.log(`note: no --project given — landed in the default "TAG Convert" project.`);
+      console.log(`      move it with another project via --project <slug|id>, or list options: project:list`);
+    }
+    console.log(`workflow created: ${r.id} (v${r.currentVersion?.version ?? 1})  project=${proj.name || proj.id}`);
     console.log(r.id);
   },
 

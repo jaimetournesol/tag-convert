@@ -126,12 +126,26 @@ Write `graph.json` following the plan from Phase 1 and `NODES.md`. Principles:
   `$string($)` or reach into a field (`JSONATA.md`).
 - End on an observable terminal (`format-output` / `log` / `chat-response`).
 
-Create it:
+**Pick a project FIRST.** A workflow must belong to a project or it won't be
+visible in the TAG UI (the UI is project-scoped — every list/editor route is
+under `/p/:projectSlug/...`, so a project-less workflow can't be listed or
+opened). Reuse an existing project or create one:
 
 ```bash
-node <plugin>/scripts/tag.mjs workflow:create --name "My Project" --graph graph.json
+node <plugin>/scripts/tag.mjs project:list                       # id · slug · name
+node <plugin>/scripts/tag.mjs project:create --name "My Project"  # → prints a project id
+```
+
+Create the workflow **with `--project`** (slug or id):
+
+```bash
+node <plugin>/scripts/tag.mjs workflow:create --name "My Project" --graph graph.json --project my-project
 # → prints the workflow id ; iterate with:  workflow:save --id <id> --graph graph.json
 ```
+
+If you omit `--project`, the CLI still attaches one (a default "TAG Convert"
+project) so the workflow is never orphaned — but prefer an explicit, meaningful
+project so the user finds it where they expect.
 
 ## Phase 6 — Test end-to-end (the acceptance test)
 
