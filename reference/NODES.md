@@ -14,8 +14,11 @@ Edges connect ports:
   "sourceHandle": "output", "targetHandle": "input" }
 ```
 
-> **Omit node `position`** — the editor auto-lays-out. If you must set it,
-> use `{ "x": <num>, "y": <num> }` with **both** keys.
+> **`position` is required by the API** — every node needs
+> `"position": { "x": <num>, "y": <num> }` (both keys). The `tag.mjs`
+> CLI auto-fills a left-to-right grid for any node that omits it, so you
+> CAN leave it out when authoring graphs for the CLI; if you POST to the
+> API directly, you must include it or the request is rejected.
 
 ## Triggers & input
 - **`input`** — seed/receive data. `config.data` = default object (overridden
@@ -27,14 +30,25 @@ Edges connect ports:
 - **`transform`** — JSONata reshape. `config.expression`. In: `input`, out:
   `output`. See `JSONATA.md`.
 - **`branch`** — boolean route. `config.condition` (JSONata → truthy).
-  Outputs: `true`, `false`. In: `input`.
+  Outputs: `true`, `false`. In: `input`. **The chosen handle passes the
+  upstream value through UNCHANGED** — a node downstream of a branch sees
+  the original object directly, so reference fields as `$.ticket`, NOT
+  `$.data.ticket` (the `{ data, result, ... }` wrapper is internal routing
+  metadata, not what downstream receives).
 - **`smart-branch`** — dynamic router. `config.branches = [{id,label,color}]`;
   outgoing edges set `sourceHandle` to a branch `id`.
 - **`http-get` / `http-post`** — call an HTTP endpoint deterministically.
   `config.url`, `config.headers`, `config.body`.
 - **`mcp-tool`** — call ONE known MCP tool deterministically.
   `config.capabilityId`, `config.toolName`, `config.args`. Outputs: `output`
-  (json), `error` (string).
+  (json), `error` (string). **Limitation:** a deterministic `mcp-tool` node
+  can only reach `static-url` / `mcpUrl` capabilities — it CANNOT resolve a
+  **relay-sourced** capability (one bridged via `tag-mcp-bridge`), because
+  that needs a minted relay consume-token the node primitive doesn't hold.
+  Relay-backed tools are only callable from an **agent** (`claude-sdk`) node
+  (which proxies through the engine). So for a bridged tool, either give it
+  to an agent, or — often cleaner — fetch the data outside and pass it in as
+  input. The capability stays attached and usable by agents either way.
 - **`join`** — fan-in. `config.mergeStrategy` = `array` | `object`. Inputs:
   `input1`..`input4`. Out: `output`.
 - **`iterator`** — fan-out over an array. `config.arrayPath`,

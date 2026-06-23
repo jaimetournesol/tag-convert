@@ -8,7 +8,11 @@ a bare string. `$` is that object.
   `$` is e.g. `{ "url": "https://…" }` or `{ "result": "…" }`.
 - A `claude-sdk` agent emits `{ text, toolCalls, tokensUsed, costUsd }`.
 - An `mcp-tool` emits `{ output }` on success (and a string on its `error` port).
-- A `branch` emits `{ data, result, condition, _activeBranch }`.
+- A `branch`'s `true`/`false` handle passes the upstream value through
+  **unchanged** — a node downstream of a branch sees the ORIGINAL object, so
+  reach in as `$.ticket`, NOT `$.data.ticket`. (Internally the branch carries
+  `{ data, result, condition, _activeBranch }` for routing, but the runtime
+  unwraps `data` before handing it to the next node.)
 
 ## Rules
 

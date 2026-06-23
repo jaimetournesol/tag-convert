@@ -146,7 +146,13 @@ async function streamEvents(url) {
       const dataLine = chunk.split('\n').find((l) => l.startsWith('data:'));
       if (!dataLine) continue;
       let frame; try { frame = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
-      if (renderFrame(frame)) return; // final
+      if (renderFrame(frame)) {
+        // final — cancel the reader so the open SSE socket is released and the
+        // process can exit (otherwise the undrained stream keeps Node alive
+        // and `test-run` appears to hang after the final frame).
+        await reader.cancel().catch(() => {});
+        return;
+      }
     }
   }
 }
@@ -215,6 +221,23 @@ async function resolveProjectId(token, args) {
   }
   const p = await findOrCreateProject(token, { name: 'TAG Convert', slug: 'tag-convert' });
   return { id: p.id, how: 'default', name: p.name, isDefault: true };
+}
+
+// ── graph normalization ────────────────────────────────────────────────────
+// The API requires `position:{x,y}` on EVERY node (WorkflowNodeSchema), but
+// hand/LLM-authored graphs routinely omit it. Backfill a simple left-to-right
+// grid for any node missing a valid position so authors can leave it out (the
+// editor lets the user rearrange afterwards). Mutates + returns the graph.
+function ensurePositions(graph) {
+  if (!graph || !Array.isArray(graph.nodes)) return graph;
+  const COL = 320, ROW = 160, PER_ROW = 4;
+  graph.nodes.forEach((n, i) => {
+    const p = n.position;
+    if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') {
+      n.position = { x: (i % PER_ROW) * COL, y: Math.floor(i / PER_ROW) * ROW };
+    }
+  });
+  return graph;
 }
 
 // ── commands ──────────────────────────────────────────────────────────────
@@ -286,7 +309,7 @@ const cmds = {
   async ['workflow:create'](args) {
     const s = await session();
     if (!args.name || !args.graph) throw new Error('--name and --graph FILE are required');
-    const graph = JSON.parse(readFileSync(args.graph, 'utf8'));
+    const graph = ensurePositions(JSON.parse(readFileSync(args.graph, 'utf8')));
     // ALWAYS attach a project — a project-less workflow is invisible in the
     // project-scoped TAG UI (can't be listed or opened). See resolveProjectId.
     const proj = await resolveProjectId(s.token, args);
@@ -305,7 +328,7 @@ const cmds = {
   async ['workflow:save'](args) {
     const s = await session();
     if (!args.id || !args.graph) throw new Error('--id and --graph FILE are required');
-    const graph = JSON.parse(readFileSync(args.graph, 'utf8'));
+    const graph = ensurePositions(JSON.parse(readFileSync(args.graph, 'utf8')));
     const r = await api('POST', `/api/workflows/${args.id}/versions`, {
       token: s.token,
       body: { graph, comment: args.comment || 'tag-convert save' },
@@ -320,11 +343,14 @@ const cmds = {
     if (typeof args.input === 'string') {
       input = args.input.startsWith('@') ? JSON.parse(readFileSync(args.input.slice(1), 'utf8')) : JSON.parse(args.input);
     }
-    const body = { input, ...(args.graph ? { graph: JSON.parse(readFileSync(args.graph, 'utf8')) } : {}) };
+    const body = { input, ...(args.graph ? { graph: ensurePositions(JSON.parse(readFileSync(args.graph, 'utf8'))) } : {}) };
     const r = await api('POST', `/api/workflows/${args.id}/test-run`, { token: s.token, body });
     console.log(`run ${r.runId} (invocation ${r.invocationId}) — streaming…`);
     const streamUrl = `${API}${r.streamUrl}?token=${encodeURIComponent(s.token)}`;
     await streamEvents(streamUrl);
+    // Belt-and-braces: even after cancelling the SSE reader, a lingering
+    // keep-alive socket can keep Node alive. test-run is terminal, so exit.
+    process.exit(0);
   },
 };
 
