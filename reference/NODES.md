@@ -41,14 +41,20 @@ Edges connect ports:
   `config.url`, `config.headers`, `config.body`.
 - **`mcp-tool`** — call ONE known MCP tool deterministically.
   `config.capabilityId`, `config.toolName`, `config.args`. Outputs: `output`
-  (json), `error` (string). **Limitation:** a deterministic `mcp-tool` node
-  can only reach `static-url` / `mcpUrl` capabilities — it CANNOT resolve a
-  **relay-sourced** capability (one bridged via `tag-mcp-bridge`), because
-  that needs a minted relay consume-token the node primitive doesn't hold.
-  Relay-backed tools are only callable from an **agent** (`claude-sdk`) node
-  (which proxies through the engine). So for a bridged tool, either give it
-  to an agent, or — often cleaner — fetch the data outside and pass it in as
-  input. The capability stays attached and usable by agents either way.
+  (json), `error` (string).
+  - **Relay capabilities now work here** (as of 2026-06-24). A deterministic
+    `mcp-tool` node CAN call a **relay-sourced** capability (one bridged via
+    `tag-mcp-bridge`) — the worker mints the relay consume-token for you, same
+    as agents. So you no longer need to give a bridged tool to an agent or
+    stand up a separate static-url server just to call it from the graph.
+    (`static-url` / `azure-resource` capabilities work too.)
+  - **`config.args` is honored** — set it to call the tool with specific,
+    shaped arguments. Strings support `${path}` / `{{path}}` templating against
+    the upstream input: a whole-placeholder preserves the value's type
+    (`"${ticket.score}"` → the number), embedded placeholders interpolate as
+    text (`"q=${ticket.q}"`). If you OMIT `config.args`, the whole upstream
+    output is forwarded as the args (legacy behaviour). This means you usually
+    no longer need a `transform` in front of an `mcp-tool` just to shape args.
 - **`join`** — fan-in. `config.mergeStrategy` = `array` | `object`. Inputs:
   `input1`..`input4`. Out: `output`.
 - **`iterator`** — fan-out over an array. `config.arrayPath`,
