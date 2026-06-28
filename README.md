@@ -79,6 +79,29 @@ node scripts/tag.mjs workflow:save  --id ID --graph graph.json
 node scripts/tag.mjs test-run --id ID --input '{"...":"..."}'
 ```
 
+## Multiple projects at once (one bridge per project)
+
+The relay gives each **devId** a single bridge slot — a second bridge on the
+same devId kicks the first. To run several projects' MCP servers concurrently,
+mint a **per-project** token: `--project <name>` derives a distinct slot
+(`<userId>__<slug>`, namespaced under your own id), and `capability:create
+--project <name>` points that project's tools at the matching slot.
+
+```
+# project A
+node scripts/tag.mjs bridge-token   --project tariff --write a/.bridge.env
+node scripts/tag.mjs capability:create --name "Tariff Tools" --slug tariff-tools --project tariff
+./a/run-bridge.sh        # exposes A's MCP server on slot <userId>__tariff
+
+# project B — runs at the SAME time, its own slot
+node scripts/tag.mjs bridge-token   --project ifrs --write b/.bridge.env
+node scripts/tag.mjs capability:create --name "IFRS Tools" --slug ifrs-tools --project ifrs
+./b/run-bridge.sh        # exposes B's MCP server on slot <userId>__ifrs
+```
+
+Omit `--project` for your default single slot. Check any slot with
+`bridge-status --project <name>`.
+
 ## Requirements
 
 - Node 18+ (the CLI + Node template). Python 3.10+ for the Python template.

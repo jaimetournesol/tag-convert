@@ -15,10 +15,15 @@
  * Commands:
  *   login                          authenticate, cache the session
  *   whoami                         print user id (= devId), org, email
- *   bridge-token [--write FILE]    mint a tag-mcp-bridge token (writes TAG_BRIDGE_TOKEN= line if --write)
- *   bridge-status                  is your local bridge connected to the relay?
- *   capability:create --name N --slug S [--devId D] [--scope personal|org]
- *                                  create an mcp-server (relay) capability → prints its id
+ *   bridge-token [--project P] [--write FILE]
+ *                                  mint a tag-mcp-bridge token + print its devId.
+ *                                  --project P → a SEPARATE bridge slot so you can
+ *                                  run one bridge per project at once. --write FILE
+ *                                  writes a TAG_BRIDGE_TOKEN= env file.
+ *   bridge-status [--project P]    is your (per-project) bridge connected to the relay?
+ *   capability:create --name N --slug S [--project P | --devId D] [--scope personal|org]
+ *                                  create an mcp-server (relay) capability → prints its id.
+ *                                  --project P points it at that project's bridge slot.
  *   capability:list                list capabilities visible to you
  *   project:list                   list projects you can use (id · slug · name)
  *   project:create --name N [--slug S]                     find-or-create a project → prints its id
@@ -246,6 +251,17 @@ function ensurePositions(graph) {
   return graph;
 }
 
+// Per-project bridge slot id. A dev's BASE devId is their userId (one relay
+// slot). `--project <name>` derives a DISTINCT slot `<userId>__<slug>` so the
+// dev can run one bridge per project at once. MUST match the tag-api rule in
+// routes/me-relay-bridge.ts (projectDevId) so a capability created here
+// resolves to the bridge token minted there.
+function projectDevId(userId, project) {
+  if (!project) return userId;
+  const slug = String(project).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  return slug ? `${userId}__${slug}` : userId;
+}
+
 // ── commands ──────────────────────────────────────────────────────────────
 const cmds = {
   async login() { const s = await login(); console.log(`Logged in as ${s.email} (userId/devId ${s.userId}, org ${s.orgId})`); },
@@ -254,12 +270,17 @@ const cmds = {
 
   async ['bridge-token'](args) {
     const s = await session();
-    const r = await api('POST', '/api/me/relay-bridge-token', { token: s.token });
+    // `--project <name>` mints a per-project slot so you can run more than one
+    // bridge at once (one relay slot per devId; same project → same slot).
+    const r = await api('POST', '/api/me/relay-bridge-token', { token: s.token, body: args.project ? { project: args.project } : {} });
+    console.log(`devId: ${r.devId || s.userId}${args.project ? `  (project "${args.project}")` : ''}`);
     console.log(`token (expires ${r.expiresAt}):\n${r.token}`);
     if (args.write) {
       const relay = cfg('TAG_RELAY_URL');
       if (!relay) throw new Error('Set TAG_RELAY_URL before --write (your TAG relay base URL).');
-      writeFileSync(args.write, `TAG_BRIDGE_TOKEN=${r.token}\nTAG_RELAY_URL=${relay}\n`);
+      // devId is encoded in the token (bridge derives it), but we record it as
+      // a comment so you know which slot this env file drives.
+      writeFileSync(args.write, `# bridge slot devId=${r.devId || s.userId}\nTAG_BRIDGE_TOKEN=${r.token}\nTAG_RELAY_URL=${relay}\n`);
       console.log(`\nwrote ${args.write}`);
     }
   },
@@ -267,16 +288,19 @@ const cmds = {
   // Alias — onboarding docs / older notes call this `relay-bridge`.
   async ['relay-bridge'](args) { return cmds['bridge-token'](args); },
 
-  async ['bridge-status']() {
+  async ['bridge-status'](args) {
     const s = await session();
-    console.log(JSON.stringify(await api('GET', '/api/me/relay-bridge-status', { token: s.token }), null, 2));
+    const qs = args.project ? `?project=${encodeURIComponent(args.project)}` : '';
+    console.log(JSON.stringify(await api('GET', `/api/me/relay-bridge-status${qs}`, { token: s.token }), null, 2));
   },
 
   async ['capability:create'](args) {
     const s = await session();
     const name = args.name, slug = args.slug;
     if (!name || !slug) throw new Error('--name and --slug are required');
-    const devId = args.devId || s.userId;
+    // `--project <name>` points this capability at that project's bridge slot
+    // (`<userId>__<slug>`); `--devId` overrides outright; else the base slot.
+    const devId = args.devId || projectDevId(s.userId, args.project);
     if (!devId) throw new Error('could not resolve devId — pass --devId (your TAG user id)');
     const r = await api('POST', '/api/capabilities', {
       token: s.token,
