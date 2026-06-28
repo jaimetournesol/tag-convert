@@ -97,7 +97,7 @@ function decodeJwt(t) {
 }
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
-async function api(method, path, { token, body } = {}) {
+async function api(method, path, { token, body, _retry } = {}) {
   if (!API) throw new Error('Set TAG_API_URL (env or .env), e.g. https://your-tag-api.example.com');
   const res = await fetch(`${API}${path}`, {
     method,
@@ -113,6 +113,16 @@ async function api(method, path, { token, body } = {}) {
       ? JSON.stringify(body)
       : (method === 'GET' || method === 'HEAD' ? undefined : '{}'),
   });
+  // The access token lives ~15 min. On 401, silently swap our cached refresh
+  // token (7-day) for a fresh access token via /api/auth/refresh and retry
+  // once — no password re-prompt (so TAG_PASSWORD can be dropped from .env
+  // after the first login). Skipped for a caller-supplied TAG_TOKEN (no
+  // refresh token to use) and for the auth endpoints themselves.
+  if (res.status === 401 && !_retry && !cfg('TAG_TOKEN')
+      && path !== '/api/auth/login' && path !== '/api/auth/refresh') {
+    const fresh = await tryRefresh();
+    if (fresh) return api(method, path, { token: fresh, body, _retry: true });
+  }
   const text = await res.text();
   let json; try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
   if (!res.ok) {
@@ -128,9 +138,23 @@ async function login() {
   if (!email || !password) throw new Error('Set TAG_EMAIL and TAG_PASSWORD (env or .env) to log in, or set TAG_TOKEN.');
   const r = await api('POST', '/api/auth/login', { body: { email, password } });
   if (!r.token) throw new Error('Login returned no token.');
-  const s = { token: r.token, userId: r.user?.id, orgId: r.org?.id ?? r.user?.orgId, email: r.user?.email };
+  // Persist the 7-day refresh token so api() can silently re-mint access
+  // tokens without the password (see tryRefresh / api 401 handling).
+  const s = { token: r.token, refreshToken: r.refreshToken, userId: r.user?.id, orgId: r.org?.id ?? r.user?.orgId, email: r.user?.email };
   saveSession(s);
   return s;
+}
+// Swap the cached refresh token for a fresh access token. Returns the new
+// access token (and rotates the stored session) or null if not refreshable.
+async function tryRefresh() {
+  const s = loadSession();
+  if (!s?.refreshToken) return null;
+  try {
+    const r = await api('POST', '/api/auth/refresh', { body: { refreshToken: s.refreshToken }, _retry: true });
+    if (!r?.token) return null;
+    saveSession({ ...s, token: r.token, refreshToken: r.refreshToken || s.refreshToken });
+    return r.token;
+  } catch { return null; }
 }
 async function session() {
   if (cfg('TAG_TOKEN')) {

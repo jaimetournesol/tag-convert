@@ -54,6 +54,12 @@ TAG_PASSWORD=...
 
 Then: `node scripts/tag.mjs login && node scripts/tag.mjs whoami`.
 
+`login` caches a 7-day **refresh token** in `.tag-convert/session.json`, and
+the CLI silently re-mints the short-lived (~15 min) access token on `401` — so
+you only enter the password **once**. After the first `login` you can remove
+`TAG_PASSWORD` from `.env`; you'll only need it again after 7 idle days (or
+`login` to refresh sooner). Add `.tag-convert/` to `.gitignore`.
+
 ## Use
 
 In Claude Code, from the project you want to convert:
