@@ -100,7 +100,13 @@ async function api(method, path, { token, body } = {}) {
       'content-type': 'application/json',
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    // content-type is always application/json, so a body-less write (POST/PUT/
+    // PATCH/DELETE) trips the API's "Body cannot be empty when content-type is
+    // set to 'application/json'" 400 — hit by bridge-token, which sends no
+    // body. Default to '{}' for writes; GET/HEAD carry no body.
+    body: body !== undefined
+      ? JSON.stringify(body)
+      : (method === 'GET' || method === 'HEAD' ? undefined : '{}'),
   });
   const text = await res.text();
   let json; try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
@@ -257,6 +263,9 @@ const cmds = {
       console.log(`\nwrote ${args.write}`);
     }
   },
+
+  // Alias — onboarding docs / older notes call this `relay-bridge`.
+  async ['relay-bridge'](args) { return cmds['bridge-token'](args); },
 
   async ['bridge-status']() {
     const s = await session();
