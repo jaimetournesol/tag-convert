@@ -115,6 +115,12 @@ so each agent sees only the tools its job needs — a reviewer agent gets
 `scrape_website`; a writer agent gets the filesystem tools. Smaller tool
 surface = fewer wrong turns, clearer traces.
 
+For a **hard** boundary (not just a soft, visible-surface filter), give each
+agent its **own per-agent bridge** that runs only its tools — the other agents'
+tools are then physically unreachable, so a prompt-injected or buggy agent can't
+call them. This is the recommended default when tool needs differ or any tool is
+sensitive; see "one bridge per agent" in the plugin `README.md`.
+
 ## 5. Capabilities — packaged external power
 
 A **capability** is how an agent reaches beyond its own reasoning. Three kinds:

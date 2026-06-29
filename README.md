@@ -20,7 +20,7 @@ tag-convert/
 ├── commands/                      /tag-convert, /tag-test
 ├── scripts/tag.mjs                dependency-free TAG API CLI (the tools)
 ├── templates/mcp-server/          node + python MCP server scaffolds
-└── reference/                     CONCEPTS · NODES · JSONATA
+└── reference/                     CONCEPTS · NODES · JSONATA · EXAMPLES
 ```
 
 ## Install
@@ -107,6 +107,36 @@ node scripts/tag.mjs capability:create --name "IFRS Tools" --slug ifrs-tools --p
 
 Omit `--project` for your default single slot. Check any slot with
 `bridge-status --project <name>`.
+
+### Recommended: one bridge per *agent* (least privilege)
+
+The slot namespace is arbitrary, so go finer than per-project: run **one bridge
+per agent**, each exposing **only that agent's tools**. In an agent platform, a
+single bridge that exposes *every* tool means a prompt-injected or buggy agent can
+call *any* of them (a "summariser" reaching a "delete-DB" tool). A bridge per agent
+makes the other agents' tools physically unreachable — least privilege at the
+connection boundary, on top of `capabilityToolFilters` and the relay deny-list.
+
+Use a per-agent slot name (`<project>-<agent>`):
+
+```
+# the "enrich" agent — its own slot, ONLY its tools
+node scripts/tag.mjs bridge-token      --project ifrs-enrich --write enrich/.bridge.env
+node scripts/tag.mjs capability:create --name "IFRS enrich tools" --slug ifrs-enrich-tools --project ifrs-enrich
+./enrich/run-bridge.sh     # this process exposes ONLY the enrich agent's MCP server
+
+# the "cross-check" agent — separate slot, its own (different) tools
+node scripts/tag.mjs bridge-token      --project ifrs-crosscheck --write check/.bridge.env
+node scripts/tag.mjs capability:create --name "IFRS cross-check tools" --slug ifrs-check-tools --project ifrs-crosscheck
+./check/run-bridge.sh
+```
+
+Then give each agent node **only its own** capability id in `capabilityIds[]`. The
+bridge process is what scopes the tools (it runs only that agent's server); the
+relay just routes by slot. Granularity is a dial (per-user → per-project →
+per-agent → per-tool-group) — default to **per-agent** when agents have different
+or sensitive tool needs; share a bridge only when agents genuinely share one tool
+set.
 
 ## Requirements
 

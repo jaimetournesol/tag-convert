@@ -23,6 +23,8 @@ The plugin gives you:
 - `reference/CONCEPTS.md` — the TAG way of thinking (read this).
 - `reference/NODES.md` — node types, ports, config.
 - `reference/JSONATA.md` — safe `branch`/`transform` expressions.
+- `reference/EXAMPLES.md` — two complete starter graphs (an interactive chatbot
+  with MCP tools + TAG-owned chat history, and a deterministic lookup).
 - `scripts/tag.mjs` — a dependency-free TAG API CLI (login, capability,
   workflow, test-run + live telemetry).
 - `templates/mcp-server/{node,python}/` — MCP server scaffolds.
@@ -37,6 +39,36 @@ The plugin gives you:
    Verify: `node <plugin>/scripts/tag.mjs login` then `… whoami`.
 
 > Throughout, run the CLI as `node <path-to-plugin>/scripts/tag.mjs <cmd>`.
+
+## Scope — TAG is your customers' runtime, not your data-prep tool
+
+Decide what belongs in TAG **at all** before decomposing. The line:
+
+- **TAG = the customer-facing, observable, validatable runtime.** You build TAG
+  workflows for **your customers** to run — classification, Q&A, an interactive
+  chatbot — with observable steps and (for chat) **TAG-owned conversation state**
+  (history is persisted in TAG, keyed by a conversation/session id — your
+  customer never has to store it, and neither do you).
+- **Your own data prep stays LOCAL.** Ingesting documents, **enriching your own
+  knowledge graph**, batch-embedding, backfills — that's *dev-side* work on
+  *your* data. Do it **locally with your own Claude (Claude Code) or your own
+  scripts** — **not** a TAG workflow.
+
+**Why this matters:** a TAG workflow runs agents in the platform sandbox, which
+spends **API tokens** (the platform's). Running your own KG ingestion/enrichment
+*through a TAG workflow* burns platform tokens for work that is just your local
+data preparation — the exact anti-pattern to avoid (a dev ran ingestion-into-his-
+own-graph as a TAG workflow and it cost a lot of tokens for zero customer value).
+
+**The shape that's right:**
+1. **Locally, with your own Claude / scripts** — build and enrich your KG / data.
+2. **Wrap your local data + functions as MCP servers** (Phase 2) and bridge them.
+3. **In TAG, build the observable workflow your *customers* run** — it *queries*
+   your data through those MCP tools (and can chat over it, with TAG holding the
+   conversation history). The heavy, one-off, dev-side compute never enters TAG.
+
+If an operation is "prepare/enrich *my* data," keep it local. If it's "*serve* a
+customer a validatable result over that data," that's the TAG workflow.
 
 ## Phase 0 — Understand the project
 
@@ -107,9 +139,23 @@ your `devId`, so a TAG agent that holds this capability can call your bridged
 tools. Note the printed **capability id**. (Optionally narrow which tools each
 agent sees later via `capabilityToolFilters` — see `NODES.md`.)
 
+**Least privilege — one bridge per agent (recommended).** When a workflow has
+several agents with different tool needs, give each agent its **own** bridge slot
+exposing **only its tools**, rather than one shared bridge carrying every tool.
+Mint a per-agent slot (`--project "<project>-<agent>"`) and create a per-agent
+capability pointed at it, then put **only that capability id** on that agent's
+node. The bridge process is the hard boundary (it runs only that agent's MCP
+server), so a prompt-injected or buggy agent physically cannot reach another
+agent's tools — defense-in-depth above `capabilityToolFilters` (a soft,
+visible-surface filter). See "one bridge per agent" in the plugin `README.md`.
+Default to per-agent when tool needs differ or any tool is sensitive; share a
+bridge only when agents genuinely share one tool set.
+
 ## Phase 5 — Author the workflow graph
 
-Write `graph.json` following the plan from Phase 1 and `NODES.md`. Principles:
+Write `graph.json` following the plan from Phase 1 and `NODES.md`. For two
+complete, adaptable starting graphs (an interactive chatbot and a deterministic
+lookup) see `reference/EXAMPLES.md`. Principles:
 - **Omit node positions** (auto-layout). Use canonical node types.
 - Deterministic steps as nodes; agents only where needed, each with
   `capabilityIds: ["<your-cap-id>"]` and a `systemPrompt` that **names the
@@ -175,7 +221,9 @@ should later become deterministic `mcp-tool` nodes).
   the dynamic core. (This is the single most common mistake.)
 - **Baking run data into the workflow.** URLs/ids/paths the run operates on
   are `input`, not constants.
-- **Giving an agent every tool.** Scope with `capabilityToolFilters`.
+- **Giving an agent every tool.** Soft-scope with `capabilityToolFilters`; for a
+  hard boundary give each agent its **own per-agent bridge** exposing only its
+  tools (see Phase 4 + `README.md`). Default to one bridge per agent.
 - **String functions on a bare `$`** in JSONata — coerce/reach in.
 - **Skipping the local smoke test** before bridging, or **skipping the
   test-run** before handing off.
