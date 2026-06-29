@@ -149,7 +149,75 @@ costs no agent tokens, and every node's input/output shows in the run trace —
 ideal for the validatable, customer-facing surface. Reach for the agent (example
 1) only where the task genuinely needs judgment or open-ended conversation.
 
-> Reminder (see SKILL.md → "Scope"): both examples *serve a customer over your
-> data via MCP tools*. Building or **enriching** that data (ingesting docs into
-> your KG, embeddings, backfills) is **local** dev-side work — do it with your
-> own Claude/scripts, not a TAG workflow.
+---
+
+## 3. Observable, multi-agent workflow (the "show-the-value" pattern)
+
+The flagship shape — it proves BOTH the depth of your data **and** TAG itself. A
+rigid, auditable graph where each step is a **visible node**: graph lookups and a
+**calculator that reads your KG** as deterministic `mcp-tool` nodes, agents only
+at the judgment steps, sharing a workspace. The customer sees *how* the answer was
+derived — which facts, which rule, the calculation, the cross-check — the audit
+trail a single black-box agent can't give. (IFRS-style example: a figure like a
+lease liability computed from graph facts under a cited standard, then validated.)
+
+**Shape:** `api-trigger → mcp-tool(fetch facts) → mcp-tool(lookup rule) →
+claude-sdk(interpret, workspace) → mcp-tool(calculator over the KG) →
+claude-sdk(cross-check, workspace) → format-output(validate) → chat-response`
+
+```json
+{
+  "nodes": [
+    { "id": "trigger", "type": "api-trigger", "data": { "label": "Question",
+      "config": { "inputSchema": { "type": "object", "required": ["question","entityId"],
+        "properties": { "question": { "type": "string" }, "entityId": { "type": "string" } } } } } },
+    { "id": "facts", "type": "mcp-tool", "data": { "label": "Fetch entity facts (graph)",
+      "config": { "capabilityId": "<CAP_ID>", "toolName": "graph_fetch_entity", "args": { "entityId": "${entityId}" } } } },
+    { "id": "rule", "type": "mcp-tool", "data": { "label": "Look up applicable standard (graph)",
+      "config": { "capabilityId": "<CAP_ID>", "toolName": "graph_lookup_standard", "args": { "topic": "${question}" } } } },
+    { "id": "interpret", "type": "claude-sdk", "data": { "label": "Interpret + plan",
+      "config": { "model": "claude-sonnet-4-6", "maxTurns": 8, "enableWorkspace": true, "capabilityIds": ["<CAP_ID>"],
+        "systemPrompt": "Read the entity facts and the cited standard. Decide the basis + inputs for the figure and WRITE your working to the shared workspace. Do not compute it yourself — the calculator tool does that." } } },
+    { "id": "calc", "type": "mcp-tool", "data": { "label": "Calculator (reads the graph)",
+      "config": { "capabilityId": "<CAP_ID>", "toolName": "compute_figure", "args": { "entityId": "${entityId}", "measure": "lease_liability" } } } },
+    { "id": "crosscheck", "type": "claude-sdk", "data": { "label": "Cross-check + validate",
+      "config": { "model": "claude-sonnet-4-6", "maxTurns": 8, "enableWorkspace": true, "capabilityIds": ["<CAP_ID>"],
+        "systemPrompt": "Using the working in the shared workspace and the cited standard, verify the calculator's figure is correct and compliant. Flag any discrepancy; otherwise confirm." } } },
+    { "id": "validate", "type": "format-output", "data": { "label": "Validate result contract",
+      "config": { "expression": "{ \"entityId\": entityId, \"figure\": $.output, \"standard\": $.rule, \"checked\": true }" } } },
+    { "id": "reply", "type": "chat-response", "data": { "label": "Cited answer",
+      "config": { "responseFormat": "markdown", "responseField": "response" } } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "trigger", "target": "facts" },
+    { "id": "e2", "source": "facts", "target": "rule" },
+    { "id": "e3", "source": "rule", "target": "interpret" },
+    { "id": "e4", "source": "interpret", "target": "calc" },
+    { "id": "e5", "source": "calc", "target": "crosscheck" },
+    { "id": "e6", "source": "crosscheck", "target": "validate" },
+    { "id": "e7", "source": "validate", "target": "reply" }
+  ]
+}
+```
+
+**Why this is the demo**
+- Every `mcp-tool` step — facts, rule, and the **calculator** — is a deterministic,
+  inspectable node. The run trace shows each input + output, so the result is
+  *auditable*, not asserted.
+- The two agents share a workspace (`enableWorkspace: true`): "interpret" hands its
+  working to "cross-check" — you're showing **orchestration**, not one model.
+- `format-output` validates the result against a contract before it's returned —
+  a visible pass/fail.
+- It markets both sides at once: the **depth of your graph** (rich facts + cited
+  rules behind every answer) and **TAG** (observable, validatable, re-runnable).
+
+Trade-off: more to build, and it answers the cases you designed nodes for. Pair it
+with example 1 (the agent chat) for open-ended questions. (`${…}` arg wiring follows
+the data on the edges — see `NODES.md`; the calculator stays a deterministic node so
+the computation is visible, not hidden in an agent.)
+
+> Reminder (see SKILL.md → "Scope"): all three examples *serve a customer over your
+> data via MCP tools* — and the customer workflow should be **rich and observable**,
+> not a thin pass-through. Building or **enriching** that data (ingesting docs into
+> your KG, embeddings, backfills) is the part that stays **local** dev-side work —
+> do it with your own Claude/scripts, not a TAG workflow.

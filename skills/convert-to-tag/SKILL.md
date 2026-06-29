@@ -63,12 +63,36 @@ own-graph as a TAG workflow and it cost a lot of tokens for zero customer value)
 **The shape that's right:**
 1. **Locally, with your own Claude / scripts** — build and enrich your KG / data.
 2. **Wrap your local data + functions as MCP servers** (Phase 2) and bridge them.
-3. **In TAG, build the observable workflow your *customers* run** — it *queries*
-   your data through those MCP tools (and can chat over it, with TAG holding the
-   conversation history). The heavy, one-off, dev-side compute never enters TAG.
+3. **In TAG, build the workflow your *customers* run** — it *queries + computes
+   over* your data through those MCP tools (and can chat over it, with TAG holding
+   the conversation history). The heavy, one-off, dev-side compute never enters TAG.
 
 If an operation is "prepare/enrich *my* data," keep it local. If it's "*serve* a
 customer a validatable result over that data," that's the TAG workflow.
+
+### Keep heavy prep out — but make the customer workflow RICH, not thin
+
+"Out of TAG" applies to **heavy data-prep only.** It does **not** mean the
+customer-facing workflow should be a single agent that hides everything. **The
+opposite:** the workflow is exactly where TAG proves its value, so make it as
+**observable** as possible —
+
+- **Push every step you can into deterministic, visible nodes** — `mcp-tool`
+  (graph lookups, a **calculator** that reads the KG and returns a figure),
+  `branch`, `transform`, `format-output`. Each becomes an auditable artifact in
+  the run trace: the customer *sees how the answer was derived* (which data, which
+  rule, the calculation, the validation). Reserve `claude-sdk` **agents** only for
+  the genuine-judgment steps.
+- **Multiple agents are fine — give them a shared workspace.** Set
+  `enableWorkspace: true` on agents that must exchange whole artifacts (e.g. an
+  "interpret/plan" agent hands working to a "cross-check/validate" agent). That
+  demonstrates orchestration a black-box chatbot can't.
+- **The more of the answer that's deterministic + visible, the stronger the
+  pitch** — it showcases BOTH the depth of the data *and* TAG's
+  observability/validatability. A rigid, multi-node, audited workflow is the
+  flagship demo; an agent chat is the flexible open-Q&A companion. Build both.
+
+See `reference/EXAMPLES.md` example 3 for this observable multi-agent shape.
 
 ## Phase 0 — Understand the project
 
