@@ -19,18 +19,29 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { open, mkdir, realpath, lstat } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { resolve, dirname, relative, isAbsolute } from 'node:path';
 
 const pexec = promisify(execFile);
 
-// Sandbox root for any filesystem tools (override with TAG_WORKSPACE_ROOT).
+// The workspace must be owned by this process's user. This is path containment,
+// not an OS sandbox against another process racing filesystem changes.
 const ROOT = resolve(process.env.TAG_WORKSPACE_ROOT || resolve(process.cwd(), 'workspace'));
-function safe(p) {
-  const abs = isAbsolute(p) ? p : resolve(ROOT, p);
-  const rel = relative(ROOT, abs);
-  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('path escapes the workspace root');
-  return abs;
+async function safe(p) {
+  if (typeof p !== 'string' || !p || p.includes('\0')) throw new Error('path must be a nonempty string');
+  const abs = resolve(ROOT, p), rel = relative(ROOT, abs);
+  if (!rel || rel === '..' || rel.startsWith('../') || isAbsolute(rel)) throw new Error('path escapes the workspace root');
+  await mkdir(ROOT, { recursive: true });
+  const root = await realpath(ROOT);
+  let current = root;
+  for (const part of rel.split('/')) {
+    current = resolve(current, part);
+    try {
+      if ((await lstat(current)).isSymbolicLink()) throw new Error('symbolic links are not allowed in workspace paths');
+    } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+  return current;
 }
 
 export const tools = [
@@ -59,7 +70,10 @@ export const tools = [
     name: 'read_file',
     description: 'Read a UTF-8 text file from the workspace.',
     inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
-    async handler({ path }) { return await readFile(safe(path), 'utf8'); },
+    async handler({ path }) {
+      const file = await open(await safe(path), constants.O_RDONLY | constants.O_NOFOLLOW);
+      try { return await file.readFile('utf8'); } finally { await file.close(); }
+    },
   },
   {
     name: 'write_file',
@@ -70,9 +84,10 @@ export const tools = [
       required: ['path', 'content'],
     },
     async handler({ path, content }) {
-      const abs = safe(path);
+      const abs = await safe(path);
       await mkdir(dirname(abs), { recursive: true });
-      await writeFile(abs, String(content ?? ''), 'utf8');
+      const file = await open(await safe(path), constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
+      try { await file.truncate(0); await file.writeFile(String(content ?? ''), 'utf8'); } finally { await file.close(); }
       return `wrote ${path} (${(content ?? '').length} bytes)`;
     },
   },

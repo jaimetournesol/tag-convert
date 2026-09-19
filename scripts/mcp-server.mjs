@@ -3,9 +3,12 @@ import {createInterface} from 'node:readline';
 import {createTools,validateArguments} from './tools.mjs';
 const tools=createTools(), send=v=>process.stdout.write(JSON.stringify(v)+'\n');
 async function handle(r){
+  if(!r || Array.isArray(r) || typeof r !== 'object' || r.jsonrpc !== '2.0' || typeof r.method !== 'string') {
+    send({jsonrpc:'2.0',id:null,error:{code:-32600,message:'Invalid Request'}}); return;
+  }
   if(r.id===undefined) return;
   const result = data=>send({jsonrpc:'2.0',id:r.id,result:data});
-  if(r.method==='initialize') return result({protocolVersion:'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'tag',version:'0.2.0'},instructions:'TAG workflow and MCP authoring and execution. Discover current node schemas, use explicit project and version IDs, monitor the returned run ID. Never blindly retry uncertain writes.'});
+  if(r.method==='initialize') return result({protocolVersion:'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'tag',version:'0.2.1'},instructions:'TAG workflow and MCP authoring and execution. Discover current node schemas, use explicit project and version IDs, monitor the returned run ID. Never blindly retry uncertain writes.'});
   if(r.method==='ping') return result({});
   if(r.method==='tools/list') return result({tools:tools.map(({handler,...t})=>t)});
   if(r.method==='tools/call') {

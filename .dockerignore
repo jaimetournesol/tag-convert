@@ -1,0 +1,9 @@
+*
+!scripts/**
+!skills/**
+!reference/**
+!templates/**
+!.codex-plugin/**
+!.claude-plugin/**
+!README.md
+!docker/Dockerfile

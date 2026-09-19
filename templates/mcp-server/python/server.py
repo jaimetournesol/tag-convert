@@ -39,7 +39,7 @@ def handle(req):
         return ok(_id, {
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "tag-project-tools", "version": "0.2.0"},
+            "serverInfo": {"name": "tag-project-tools", "version": "0.2.1"},
         })
     if method == "ping":
         return ok(_id, {})

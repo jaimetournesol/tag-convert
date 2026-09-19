@@ -74,3 +74,38 @@ node scripts/tag.mjs test-run --id WORKFLOW --version VERSION --request-key UNIQ
 ```
 
 Local contract tests use a mock TAG API and do not spend tokens. Live verification should use a small deterministic workflow and isolated bridge slot; verify output, not just submission. Report LLM costs only when TAG provides them. Capability test lists the remote catalogue; it is not a complete functional test of every exposed tool.
+
+## Docker and release installation
+
+The **management MCP** image is `ghcr.io/jaimetournesol/tag-convert:v0.2.1`
+(linux/amd64 and linux/arm64). It is different from the business-tool relay image
+`ghcr.io/jaimetournesol/mcp-bridge`. Releases include a source archive and SHA256SUMS;
+unpack it in a stable directory and run `scripts/install-local.py --shared` for skills
+and native MCP configuration. Node is required on native hosts.
+
+To use the management MCP in Docker, configure a stdio command equivalent to:
+
+```sh
+docker run --rm -i --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --mount type=bind,src=/absolute/private/tag,dst=/config,readonly \
+  --mount type=volume,src=tag-run-receipts,dst=/state \
+  ghcr.io/jaimetournesol/tag-convert:v0.2.1
+```
+
+`/config/config.json` contains the TAG API URL and authentication configuration;
+use container paths for `accountFile` (for example `/config/account.json`). Ensure
+the container's unprivileged uid 1000 can read those files; do not make secrets public.
+Keep `/state` persistent across restarts so duplicate-run protection remains effective.
+For distinct accounts use separate receipt volumes. Do not bake credentials into images
+or pass them as command arguments. For a portable MCP entry, put `docker` in `command`
+and each argument above separately in `args`, then pass that JSON to
+`install-local.py --server-file FILE --shared`. The host installation supplies skills;
+the container supplies MCP execution. No ports are published: transport is stdio.
+
+CI tests the templates, installer, and real container protocol on AMD64 and ARM64.
+Version tags publish only after both platform images pass MCP smoke tests. The
+source package includes no local credentials, configuration, run receipts or deals.
+
+Filesystem templates enforce path containment and reject symlink escapes. They
+are not an OS sandbox against concurrent filesystem mutation by another process;
+use an isolated container/user-owned workspace for untrusted project execution.

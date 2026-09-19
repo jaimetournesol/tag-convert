@@ -1,6 +1,6 @@
 {
   "name": "tag-convert",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Create and run TAG workflows, modules and MCP integrations from any agent.",
   "author": {
     "name": "Tournesol"
