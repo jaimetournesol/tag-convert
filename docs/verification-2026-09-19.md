@@ -66,3 +66,11 @@ current release does not yet consume node-wide defaults. Existing Conductor
 project config is prepared for its next authorized restart. Other worker runtimes
 have not been upgraded by this Pi setup. Installer tests now include shared SSH
 configuration (three Python tests).
+
+
+CI for AgentNode PR22 passed on commit `07eea99b7aebd7cbe188dcd96d161080ac8c12a7`:
+https://github.com/jaimetournesol/agentnode/actions/runs/35434197362 . Python/adapters,
+browser/Stage, Surface build, real-service security/presentation/rollback checks,
+and Android lint/build passed. Production deployment was correctly skipped for
+the PR. Toolkit changes are reviewable in https://github.com/jaimetournesol/tag-convert/pull/2 .
+Both PRs remain unmerged. Pi ARM64 also passed the toolkit's 9 Node and 3 Python tests.
