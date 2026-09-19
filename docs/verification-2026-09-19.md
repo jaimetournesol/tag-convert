@@ -44,3 +44,25 @@ New agent sessions can load the configuration. Existing sessions were not interr
 The Mini is not the Conductor control node. Its repository/location was requested from the user. Other fleet machines and Conductor's future-project defaults have **not** been updated or verified. The portable server, manifests, installer and README are ready for that rollout. Live approval/cancel/resume and registry tool publication were not exercised on user workflows; no automated test approved a human gate or published production tools.
 
 Codex packaging reference: https://developers.openai.com/plugins/build/plugins (consulted 2026-09-19). Host-specific plugin loading differs; the tested installation uses absolute-path portable MCP configuration.
+
+
+## Pi follow-up
+
+The control host was verified as `pi`, logical name `mac`, on its unchanged
+`15b48879eb917c5614d9ad465741344997bb3d0d` release. The toolkit and skill links are
+installed under `/home/jaime/.local/share/tag-convert`; both the existing Conductor
+project and prepared node-wide defaults configure `tag` through the Pi's existing,
+host-key-verified SSH connection to the Mini. TAG credentials remain on the Mini.
+The separate API-key creation attempt was rejected (403); no new key was created.
+
+The actual Pi-configured MCP enumerated 15 tools and started/monitored a pinned TAG
+module workflow. Run `45888ba3-84b1-42b9-a64e-c4d9f4535ed7` succeeded: input17 → output34.
+No model agent was started or restarted. The Conductor was working during setup.
+
+Shared default inheritance and per-project opt-out are in AgentNode PR22:
+https://github.com/jaimetournesol/agentnode/pull/22 . The 174 Python tests passed
+locally. The PR remains unmerged pending production-rollout approval; the Pi's
+current release does not yet consume node-wide defaults. Existing Conductor
+project config is prepared for its next authorized restart. Other worker runtimes
+have not been upgraded by this Pi setup. Installer tests now include shared SSH
+configuration (three Python tests).

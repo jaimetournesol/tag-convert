@@ -55,7 +55,7 @@ def install(home, root, project_dirs=(), replace=False, shared=False, server=Non
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.symlink_to(source, target_is_directory=True)
         changed.append(str(dest))
-    return {'changed': changed, 'server': spec, 'note': 'New sessions pick up project MCP settings. Configure other machines and future project defaults separately.'}
+    return {'changed': changed, 'server': spec, 'sharedDefaultsPrepared': shared, 'note': 'Tool changes take effect on agent restart; no agent was started. Shared defaults require the matching AgentNode runtime. Configure each execution host separately.'}
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
