@@ -7,10 +7,16 @@ import time
 from pathlib import Path
 
 
-def install(home, root, project_dirs=(), replace=False):
+def install(home, root, project_dirs=(), replace=False, shared=False, server=None):
     changed = []
     spec = {'command': shutil.which('node') or 'node', 'args': [str(root / 'scripts/mcp-server.mjs')]}
+    if server is not None:
+        if not isinstance(server, dict) or not isinstance(server.get('command'), str) or not isinstance(server.get('args', []), list) or any(not isinstance(x, str) for x in server.get('args', [])):
+            raise ValueError('Server file must contain a portable command/args MCP specification')
+        spec = server
     targets = [home / '.mcp.json', *(Path(p).resolve() / '.mcp.json' for p in project_dirs)]
+    if shared:
+        targets.append(home / '.agentnode' / 'mcp.json')
     # Preflight every destination before writes.
     configs = []
     for path in dict.fromkeys(targets):
@@ -56,5 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('--home', type=Path, default=Path.home())
     parser.add_argument('--project-dir', action='append', default=[])
     parser.add_argument('--replace', action='store_true')
+    parser.add_argument('--server-file', type=Path, help='Use an explicit portable MCP server specification, e.g. SSH to an existing installation')
+    parser.add_argument('--shared', action='store_true', help='Write AgentNode shared MCP defaults (requires runtime support)')
     args = parser.parse_args()
-    print(json.dumps(install(args.home.resolve(), Path(__file__).resolve().parents[1], args.project_dir, args.replace), indent=2))
+    print(json.dumps(install(args.home.resolve(), Path(__file__).resolve().parents[1], args.project_dir, args.replace, args.shared, json.loads(args.server_file.read_text()) if args.server_file else None), indent=2))
