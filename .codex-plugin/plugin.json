@@ -1,0 +1,32 @@
+{
+  "name": "tag-convert",
+  "version": "0.2.0",
+  "description": "Create and run TAG workflows, modules and MCP integrations from any agent.",
+  "author": {
+    "name": "Tournesol"
+  },
+  "skills": "./skills/",
+  "mcpServers": {
+    "tag": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.mjs"
+      ]
+    }
+  },
+  "interface": {
+    "displayName": "TAG Workflows",
+    "shortDescription": "Build and run TAG workflows and MCP tools",
+    "longDescription": "Create and run TAG workflows, modules and MCP integrations from any agent.",
+    "developerName": "Tournesol",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Run a TAG workflow and check its results",
+      "Build a reusable TAG workflow and MCP tools"
+    ]
+  }
+}

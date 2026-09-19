@@ -39,7 +39,7 @@ def handle(req):
         return ok(_id, {
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "tag-project-tools", "version": "0.1.0"},
+            "serverInfo": {"name": "tag-project-tools", "version": "0.2.0"},
         })
     if method == "ping":
         return ok(_id, {})
@@ -70,6 +70,7 @@ def main():
         try:
             req = json.loads(line)
         except json.JSONDecodeError:
+            err(None, -32700, "Parse error")
             continue
         try:
             handle(req)

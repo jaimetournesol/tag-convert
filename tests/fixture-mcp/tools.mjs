@@ -1,0 +1,1 @@
+export const tools=[{name:'sum',description:'Add two numbers for an integration smoke test.',inputSchema:{type:'object',properties:{a:{type:'number'},b:{type:'number'}},required:['a','b'],additionalProperties:false},handler({a,b}){if(!Number.isFinite(a)||!Number.isFinite(b))throw Error('Two finite numbers are required');return {sum:a+b};}}];

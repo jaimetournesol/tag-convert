@@ -1,3 +1,5 @@
+> For current API contracts see [CURRENT-API.md](CURRENT-API.md). Discover live node ports/config with `tag_catalog(kind="nodes")` before adapting these examples.
+
 # Examples
 
 Small, complete workflows you can adapt. Both follow the rules in `CONCEPTS.md`:

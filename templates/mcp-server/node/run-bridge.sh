@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Launch tag-mcp-bridge against this Node MCP server, connecting it to the TAG relay.
 # Prereqs: `npm i -g @tournesol-tag/mcp-bridge` and a bridge token
-# (mint one with: `node ../../scripts/tag.mjs bridge-token --write .bridge.env`;
+# (mint one with: `node ../../scripts/tag.mjs bridge-token --project my-project --write .bridge.env`;
 # add --project <name> to run a SEPARATE bridge per project at the same time).
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,13 +15,14 @@ if [ -z "${TAG_RELAY_URL:-}" ]; then echo "Set TAG_RELAY_URL (your TAG relay bas
 
 if [ -z "${TAG_BRIDGE_TOKEN:-}" ]; then
   echo "TAG_BRIDGE_TOKEN is not set. Mint one:" >&2
-  echo "  node ../../scripts/tag.mjs bridge-token [--project <name>] --write $DIR/.bridge.env" >&2
+  echo "  node ../../scripts/tag.mjs bridge-token --project <name> --write $DIR/.bridge.env" >&2
   exit 1
 fi
 
+export TAG_BRIDGE_TOKEN TAG_RELAY_URL
 exec tag-mcp-bridge \
   --relay="$TAG_RELAY_URL" \
-  --token="$TAG_BRIDGE_TOKEN" \
-  --mcp-cmd="node $DIR/server.mjs" \
+  --mcp-cmd=env \
   --mcp-env "TAG_WORKSPACE_ROOT=$TAG_WORKSPACE_ROOT" \
-  --mcp-env "PROJECT_DIR=$PROJECT_DIR"
+  --mcp-env "PROJECT_DIR=$PROJECT_DIR" \
+  -- node "$DIR/server.mjs"
