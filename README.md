@@ -1,145 +1,111 @@
-# tag-convert
+# TAG: workflows, modules and MCP tools for agents
 
-A Claude Code plugin that turns **"I have a project on my laptop"** into a
-working, observable **TAG workflow** — scaffolding MCP tools from the project,
-bridging them to TAG, creating the capability + workflow, and testing it
-end-to-end.
+`tag-convert` gives Conductor, Codex and Claude agents a common capability to discover, create, execute and inspect TAG workflows. It also supports reusable modules, MCP capability registration, relay bridges and registry tools. Existing projects remain in their original TAG workspace.
 
-It is opinionated about the **TAG way of thinking**: a workflow is an
-observable DAG, you push everything deterministic into inspectable nodes and
-reserve agents for the genuinely dynamic core, and you keep **data** (flows on
-edges) separate from the **workflow** (the graph). See
-[`reference/CONCEPTS.md`](reference/CONCEPTS.md) — read it first.
+## Components
 
-## What's inside
+- `scripts/mcp-server.mjs`: 15 agent-facing MCP tools, stdio JSON-RPC.
+- `scripts/tag.mjs`: CLI using exactly the same handlers and authentication.
+- `skills/tag-workflows`: run and monitor existing workflows.
+- `skills/convert-to-tag`: author workflows/modules and implement MCP tools.
+- `templates/mcp-server/{node,python}`: project business-tool scaffolds.
+- `reference/CURRENT-API.md`: current resource, version and run contracts.
 
-```
-tag-convert/
-├── .claude-plugin/plugin.json     plugin manifest
-├── skills/convert-to-tag/SKILL.md the conversion playbook (the brain)
-├── commands/                      /tag-convert, /tag-test
-├── scripts/tag.mjs                dependency-free TAG API CLI (the tools)
-├── templates/mcp-server/          node + python MCP server scaffolds
-└── reference/                     CONCEPTS · NODES · JSONATA · EXAMPLES
-```
-
-## Install
-
-Clone this repo, then add it to Claude Code as a plugin (point your plugin
-config / marketplace at this directory), or simply open it and invoke the
-skill from a project you want to convert.
-
-The CLI needs no install — it's plain Node 18+:
-
-```bash
-node /path/to/tag-convert/scripts/tag.mjs help
-```
+Node 18+; no npm dependencies for the client/server. Existing Node/Python business servers need their own project dependencies. The separately installed `tag-mcp-bridge` connects those servers to TAG; this package does not replace or restart existing bridges.
 
 ## Configure
 
-Point it at your TAG instance and authenticate. Create a `.env` in the
-directory you run from (your TAG operator provides the API + relay URLs):
+Create `~/.config/tag/config.json` (mode 0600), or set `TAG_CONFIG_FILE`:
+
+```json
+{
+  "apiUrl": "https://your-tag-api.example.com",
+  "relayUrl": "https://your-tag-relay.example.com",
+  "accountFile": "/absolute/private/tag-account.json"
+}
+```
+
+The account file contains email/password. Alternatively use explicit `TAG_TOKEN` or `TAG_API_KEY`; appropriate TAG read/write permissions are required. `TAG_API_URL`, `TAG_RELAY_URL`, `TAG_ACCOUNT_FILE`, `TAG_STATE_DIR` override config. Tokens are not printed. No project `.env` is automatically read. This deliberately replaces the old implicit cwd `.env` behavior and shared session cache.
+
+## Attach to any agent
+
+Use this portable MCP entry, replacing the absolute path:
+
+```json
+{
+  "mcpServers": {
+    "tag": {
+      "command": "node",
+      "args": ["/absolute/path/tag-convert/scripts/mcp-server.mjs"]
+    }
+  }
+}
+```
+
+For AgentNode/Conductor, use the same `tag` spec in the project's `mcps` setting. Every agent in that project inherits its MCP settings on startup. Install on each machine where agents execute; a path on the Mini is not a path on another machine. On AgentNode versions supporting shared MCP defaults, use `install-local.py --shared` to write `~/.agentnode/mcp.json` for all existing and future projects. On older versions, include the spec in each project. Restart/new sessions may be required by the host; do not interrupt a running agent or workflow solely to reload tools.
+
+`python3 scripts/install-local.py` installs discoverable Codex and Claude skills and merges the `tag` MCP entry into the home `.mcp.json`. `--project-dir DIR` additionally merges into a project `.mcp.json`. `--server-file FILE` uses a supplied portable command/args specification, including an existing authenticated SSH connection to another installation. It backs up changed files and refuses to overwrite a differently configured existing tag server unless `--replace` is explicit. Project files are loaded by AgentNode; the installer does not pretend this changes an inaccessible control node or future project defaults.
+
+The repository includes both Claude and Codex plugin manifests. The MCP entry inside each manifest uses that host's plugin-root variable. For a generic Conductor installation use the absolute-path entry above, not a plugin variable.
+
+## CLI / MCP parity
 
 ```bash
-# Target instance (required) — ask your TAG operator for these:
-TAG_API_URL=https://your-tag-api.example.com
-TAG_RELAY_URL=https://your-tag-relay.example.com
-
-# Auth:
-TAG_EMAIL=you@example.com
-TAG_PASSWORD=...
-# or, instead of email/password:
-# TAG_TOKEN=<a TAG session JWT>
+node scripts/tag.mjs help
+node scripts/tag.mjs tools
+node scripts/tag.mjs project:list
+node scripts/tag.mjs call tag_catalog --args '{"kind":"nodes"}'
+node scripts/tag.mjs workflow:create --name "Example" --project existing-project-slug --graph graph.json
+node scripts/tag.mjs call tag_module_save --args @module.json
+node scripts/tag.mjs run:start --id WORKFLOW --version VERSION --request-key TASK_EXECUTION --input @input.json
+node scripts/tag.mjs run:wait --id RUN_ID
+node scripts/tag.mjs run:events --id RUN_ID
 ```
 
-Then: `node scripts/tag.mjs login && node scripts/tag.mjs whoami`.
+Creation requires an explicit project; the CLI no longer silently creates a default project. `workflow:save` returns a new version; use its actual version ID. For bridge capabilities, use the actual devId from `bridge-token --project SLOT --write PRIVATE_FILE`, then `capability:create --name NAME --slug SLUG --devId DEV_ID`.
 
-`login` caches a 7-day **refresh token** in `.tag-convert/session.json`, and
-the CLI silently re-mints the short-lived (~15 min) access token on `401` — so
-you only enter the password **once**. After the first `login` you can remove
-`TAG_PASSWORD` from `.env`; you'll only need it again after 7 idle days (or
-`login` to refresh sooner). Add `.tag-convert/` to `.gitignore`.
+Runs return immediately. Monitor the same ID, including after reconnecting. Reusing a requestKey with the same payload returns the accepted run; uncertain submissions block replay. Receipts live under `~/.local/state/tag-convert` and protect only this machine. Conductor must coordinate run IDs across machines. Failed tests exit nonzero. No automatic retries of externally mutating workflows and no automatic approval of human gates.
 
-## Use
+## Test
 
-In Claude Code, from the project you want to convert:
-
-```
-/tag-convert
+```bash
+node --test tests/*.test.mjs
+node scripts/tag.mjs test-run --id WORKFLOW --version VERSION --request-key UNIQUE_TEST --input @fixture.json
 ```
 
-Claude Code will read the concepts, decompose the project (deterministic nodes
-vs agentic core), scaffold + smoke-test the MCP tools, bridge them, create the
-capability and workflow, and `/tag-test` it until the trace is clean.
+Local contract tests use a mock TAG API and do not spend tokens. Live verification should use a small deterministic workflow and isolated bridge slot; verify output, not just submission. Report LLM costs only when TAG provides them. Capability test lists the remote catalogue; it is not a complete functional test of every exposed tool.
 
-## The CLI (what the skill drives)
+## Docker and release installation
 
-```
-node scripts/tag.mjs login|whoami
-node scripts/tag.mjs bridge-token --write .bridge.env
-node scripts/tag.mjs bridge-status
-node scripts/tag.mjs capability:create --name N --slug S
-node scripts/tag.mjs capability:list
-node scripts/tag.mjs workflow:create --name N --graph graph.json
-node scripts/tag.mjs workflow:save  --id ID --graph graph.json
-node scripts/tag.mjs test-run --id ID --input '{"...":"..."}'
-```
+The **management MCP** image is `ghcr.io/jaimetournesol/tag-convert:v0.2.1`
+(linux/amd64 and linux/arm64). It is different from the business-tool relay image
+`ghcr.io/jaimetournesol/mcp-bridge`. Releases include a source archive and SHA256SUMS;
+unpack it in a stable directory and run `scripts/install-local.py --shared` for skills
+and native MCP configuration. Node is required on native hosts.
 
-## Multiple projects at once (one bridge per project)
+To use the management MCP in Docker, configure a stdio command equivalent to:
 
-The relay gives each **devId** a single bridge slot — a second bridge on the
-same devId kicks the first. To run several projects' MCP servers concurrently,
-mint a **per-project** token: `--project <name>` derives a distinct slot
-(`<userId>__<slug>`, namespaced under your own id), and `capability:create
---project <name>` points that project's tools at the matching slot.
-
-```
-# project A
-node scripts/tag.mjs bridge-token   --project tariff --write a/.bridge.env
-node scripts/tag.mjs capability:create --name "Tariff Tools" --slug tariff-tools --project tariff
-./a/run-bridge.sh        # exposes A's MCP server on slot <userId>__tariff
-
-# project B — runs at the SAME time, its own slot
-node scripts/tag.mjs bridge-token   --project ifrs --write b/.bridge.env
-node scripts/tag.mjs capability:create --name "IFRS Tools" --slug ifrs-tools --project ifrs
-./b/run-bridge.sh        # exposes B's MCP server on slot <userId>__ifrs
+```sh
+docker run --rm -i --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --mount type=bind,src=/absolute/private/tag,dst=/config,readonly \
+  --mount type=volume,src=tag-run-receipts,dst=/state \
+  ghcr.io/jaimetournesol/tag-convert:v0.2.1
 ```
 
-Omit `--project` for your default single slot. Check any slot with
-`bridge-status --project <name>`.
+`/config/config.json` contains the TAG API URL and authentication configuration;
+use container paths for `accountFile` (for example `/config/account.json`). Ensure
+the container's unprivileged uid 1000 can read those files; do not make secrets public.
+Keep `/state` persistent across restarts so duplicate-run protection remains effective.
+For distinct accounts use separate receipt volumes. Do not bake credentials into images
+or pass them as command arguments. For a portable MCP entry, put `docker` in `command`
+and each argument above separately in `args`, then pass that JSON to
+`install-local.py --server-file FILE --shared`. The host installation supplies skills;
+the container supplies MCP execution. No ports are published: transport is stdio.
 
-### Recommended: one bridge per *agent* (least privilege)
+CI tests the templates, installer, and real container protocol on AMD64 and ARM64.
+Version tags publish only after both platform images pass MCP smoke tests. The
+source package includes no local credentials, configuration, run receipts or deals.
 
-The slot namespace is arbitrary, so go finer than per-project: run **one bridge
-per agent**, each exposing **only that agent's tools**. In an agent platform, a
-single bridge that exposes *every* tool means a prompt-injected or buggy agent can
-call *any* of them (a "summariser" reaching a "delete-DB" tool). A bridge per agent
-makes the other agents' tools physically unreachable — least privilege at the
-connection boundary, on top of `capabilityToolFilters` and the relay deny-list.
-
-Use a per-agent slot name (`<project>-<agent>`):
-
-```
-# the "enrich" agent — its own slot, ONLY its tools
-node scripts/tag.mjs bridge-token      --project ifrs-enrich --write enrich/.bridge.env
-node scripts/tag.mjs capability:create --name "IFRS enrich tools" --slug ifrs-enrich-tools --project ifrs-enrich
-./enrich/run-bridge.sh     # this process exposes ONLY the enrich agent's MCP server
-
-# the "cross-check" agent — separate slot, its own (different) tools
-node scripts/tag.mjs bridge-token      --project ifrs-crosscheck --write check/.bridge.env
-node scripts/tag.mjs capability:create --name "IFRS cross-check tools" --slug ifrs-check-tools --project ifrs-crosscheck
-./check/run-bridge.sh
-```
-
-Then give each agent node **only its own** capability id in `capabilityIds[]`. The
-bridge process is what scopes the tools (it runs only that agent's server); the
-relay just routes by slot. Granularity is a dial (per-user → per-project →
-per-agent → per-tool-group) — default to **per-agent** when agents have different
-or sensitive tool needs; share a bridge only when agents genuinely share one tool
-set.
-
-## Requirements
-
-- Node 18+ (the CLI + Node template). Python 3.10+ for the Python template.
-- The bridge CLI: `npm i -g @tournesol-tag/mcp-bridge`.
-- A TAG account on the target instance.
+Filesystem templates enforce path containment and reject symlink escapes. They
+are not an OS sandbox against concurrent filesystem mutation by another process;
+use an isolated container/user-owned workspace for untrusted project execution.

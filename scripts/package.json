@@ -1,9 +1,17 @@
 {
   "name": "tag-convert-cli",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
-  "description": "Dependency-free TAG API client used by the tag-convert plugin.",
-  "bin": { "tag": "./tag.mjs" },
-  "engines": { "node": ">=18" }
+  "description": "TAG workflow and MCP management CLI/server",
+  "bin": {
+    "tag": "./tag.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test ../tests/*.test.mjs",
+    "mcp": "node mcp-server.mjs"
+  }
 }

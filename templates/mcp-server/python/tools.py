@@ -17,6 +17,7 @@ Delete the examples below and add your project's real tools.
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(os.environ.get("TAG_WORKSPACE_ROOT", Path.cwd() / "workspace")).resolve()
@@ -37,7 +38,7 @@ def run_project_command(args: dict) -> str:
     if sub not in allowed:
         raise ValueError(f'subcommand "{sub}" not allowed')
     cwd = os.environ.get("PROJECT_DIR", os.getcwd())
-    out = subprocess.run(["python", "cli.py", *argv], cwd=cwd, capture_output=True, text=True, timeout=60)
+    out = subprocess.run([sys.executable, "cli.py", *argv], cwd=cwd, capture_output=True, text=True, timeout=60, check=True)
     return (out.stdout or out.stderr)[:8000]
 
 

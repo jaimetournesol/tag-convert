@@ -34,10 +34,12 @@ right, mint a bridge token and run `./run-bridge.sh` to connect it to TAG.
 
 ```bash
 npm i -g @tournesol-tag/mcp-bridge
-node ../../scripts/tag.mjs bridge-token --write .bridge.env   # mint a token
+node ../../scripts/tag.mjs bridge-token --project my-project --write .bridge.env   # mint a token
 ./run-bridge.sh                                               # connect to the relay
 ```
 
 A healthy start prints `mcp child initialized` then `connected to relay`. The
-bridge token's devId is your TAG user id — that's the `devId` you give the
+returned devId identifies this project slot — use that exact value for the
 `capability:create` step so TAG routes tool calls to this bridge.
+
+Use `tag_capability_test` after registration, then a deterministic MCP-tool workflow to verify a real call. Tokens are loaded via environment, not command-line arguments. A catalogue listing alone does not test tool behavior.

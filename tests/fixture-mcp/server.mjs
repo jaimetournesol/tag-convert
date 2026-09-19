@@ -26,7 +26,7 @@ async function handle(req) {
       return ok(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: process.env.MCP_SERVER_NAME || 'tag-project-tools', version: '0.2.1' },
+        serverInfo: { name: process.env.MCP_SERVER_NAME || 'tag-project-tools', version: '0.2.0' },
       });
     case 'ping':
       return ok(id, {});

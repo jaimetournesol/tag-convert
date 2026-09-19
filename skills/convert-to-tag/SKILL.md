@@ -1,253 +1,38 @@
 ---
 name: convert-to-tag
-description: >
-  Convert an existing local project into a TAG workflow. Use when the user
-  wants to take a project on their machine (a script, CLI, service, pipeline,
-  library) and turn it into an observable TAG workflow — exposing the
-  project's actions as MCP tools, bridging them to TAG, and building + testing
-  a workflow that orchestrates deterministic nodes and agents. Trigger on
-  requests like "convert this project to TAG", "make a TAG workflow from
-  this", "wrap my project as TAG tools".
+description: Create or adapt TAG workflows, reusable modules and MCP tools from a local project or a new automation request. Use for building, converting, registering or testing TAG integrations; use tag-workflows for running an existing workflow.
 ---
 
-# Convert a local project to TAG
+# Build with TAG
 
-You are converting the project in the current directory into a **TAG
-workflow**. This is a decomposition exercise, not a wrapping exercise. Read
-`reference/CONCEPTS.md` first and keep it in mind the whole way through — the
-quality of the result depends almost entirely on splitting the project into
-**observable deterministic nodes** vs a **small agentic core**, and keeping
-**data** (flows on edges) separate from **workflow** (the graph).
+Use the `tag` MCP server when available. The plugin root contains `reference/`, `templates/mcp-server/` and `scripts/tag.mjs`. Resolve the real path of this skill's directory and go up two levels to locate that root (also when installed through a symlink). The CLI's `tools` command lists the same schemas; `call TOOL_NAME --args @file.json` invokes them without MCP.
 
-The plugin gives you:
-- `reference/CONCEPTS.md` — the TAG way of thinking (read this).
-- `reference/NODES.md` — node types, ports, config.
-- `reference/JSONATA.md` — safe `branch`/`transform` expressions.
-- `reference/EXAMPLES.md` — two complete starter graphs (an interactive chatbot
-  with MCP tools + TAG-owned chat history, and a deterministic lookup).
-- `scripts/tag.mjs` — a dependency-free TAG API CLI (login, capability,
-  workflow, test-run + live telemetry).
-- `templates/mcp-server/{node,python}/` — MCP server scaffolds.
+## Discover and design
 
-## Prerequisites (check once)
+Read the project and any local instructions. Inspect `tag_catalog` projects, workflows, modules and capabilities before creating duplicates. Read `tag_catalog(kind="nodes")` for the target installation's **current node types, ports and configuration**. Read plugin `reference/CURRENT-API.md` for API/version semantics and `reference/CONCEPTS.md` for decomposition guidance.
 
-1. Node 18+ (`node -v`) and, for Python projects, Python 3.10+.
-2. The bridge CLI: `npm i -g @tournesol-tag/mcp-bridge`.
-3. TAG credentials available to `tag.mjs` — a `.env` in the working dir with
-   `TAG_EMAIL` + `TAG_PASSWORD` (or `TAG_TOKEN`). `TAG_API_URL` /
-   `TAG_RELAY_URL` default to the hosted instance; override for another.
-   Verify: `node <plugin>/scripts/tag.mjs login` then `… whoami`.
+Reuse the user's chosen project and workflow when supplied. Separate deterministic parsing, validation, calculation and document rendering from language interpretation. TAG can run internal as well as customer-facing workflows. Keep one-off local preparation local when that fits the task; do not impose that boundary on an explicitly requested TAG automation.
 
-> Throughout, run the CLI as `node <path-to-plugin>/scripts/tag.mjs <cmd>`.
+Put request-specific data on graph inputs, not hard-coded prompts. Use small focused agents only where judgment is useful. Select models and budgets from the target installation; do not assume old model examples remain available. Keep source evidence and identifiers in structured outputs. Do not substitute default facts for missing customer inputs.
 
-## Scope — TAG is your customers' runtime, not your data-prep tool
+## Build MCP capabilities
 
-Decide what belongs in TAG **at all** before decomposing. The line:
+Use the Node or Python template in `templates/mcp-server/` when a project needs new tools. Wrap real functions, with narrow input schemas, explicit failure results and small structured output. Test initialize, tools/list and a representative tools/call locally before bridging. Replace sample tools that do not belong in the target server.
 
-- **TAG = the customer-facing, observable, validatable runtime.** You build TAG
-  workflows for **your customers** to run — classification, Q&A, an interactive
-  chatbot — with observable steps and (for chat) **TAG-owned conversation state**
-  (history is persisted in TAG, keyed by a conversation/session id — your
-  customer never has to store it, and neither do you).
-- **Your own data prep stays LOCAL.** Ingesting documents, **enriching your own
-  knowledge graph**, batch-embedding, backfills — that's *dev-side* work on
-  *your* data. Do it **locally with your own Claude (Claude Code) or your own
-  scripts** — **not** a TAG workflow.
+A local MCP server, its relay bridge and its TAG capability are separate objects. Use `tag_bridge_token` with a distinct project/agent slot and a private output file. Start the installed bridge with that env file and inspect `tag_bridge_status`. Never replace an unrelated bridge in the same slot. A separate slot does not restrict a server's tool set: the server must expose the intended tools only.
 
-**Why this matters:** a TAG workflow runs agents in the platform sandbox, which
-spends **API tokens** (the platform's). Running your own KG ingestion/enrichment
-*through a TAG workflow* burns platform tokens for work that is just your local
-data preparation — the exact anti-pattern to avoid (a dev ran ingestion-into-his-
-own-graph as a TAG workflow and it cost a lot of tokens for zero customer value).
+Register with `tag_capability_save`, then `tag_capability_test`. Use the returned devId rather than reconstructing it from a guessed JWT claim. A catalogue test proves connectivity; exercise the actual tool separately. A static URL must implement TAG's supported MCP transport/binding; it is not automatically equivalent to any arbitrary REST endpoint.
 
-**The shape that's right:**
-1. **Locally, with your own Claude / scripts** — build and enrich your KG / data.
-2. **Wrap your local data + functions as MCP servers** (Phase 2) and bridge them.
-3. **In TAG, build the workflow your *customers* run** — it *queries + computes
-   over* your data through those MCP tools (and can chat over it, with TAG holding
-   the conversation history). The heavy, one-off, dev-side compute never enters TAG.
+## Author and verify
 
-If an operation is "prepare/enrich *my* data," keep it local. If it's "*serve* a
-customer a validatable result over that data," that's the TAG workflow.
+Use `tag_module_save` for reusable subgraphs: declare `ioContract` mappings to internal nodes and ports, and pin `moduleVersionId` in consumers. Use `tag_workflow_save` for explicit project creation or a new workflow version. Read back the version and verify its graph. TAG is the authoritative validator; the client checks only graph structure and fills missing positions.
 
-### Keep heavy prep out — but make the customer workflow RICH, not thin
+Use current node definitions for `module`, `iterator`, `mcp-tool` and agent ports. Connect capability IDs/tool names explicitly. Prefer deterministic `mcp-tool` nodes for fixed calls; give agent nodes only their needed capabilities/tool filters. Test nested modules and iteration when used rather than assuming flat-graph tests cover them.
 
-"Out of TAG" applies to **heavy data-prep only.** It does **not** mean the
-customer-facing workflow should be a single agent that hides everything. **The
-opposite:** the workflow is exactly where TAG proves its value, so make it as
-**observable** as possible —
+Start a test with `tag_run_start`, a pinned workflow version and a stable `requestKey`. It returns immediately. Inspect that same run via `tag_run_wait`/`tag_inspect`; stop at human gates and report them. Do not retry uncertain writes blindly. A new test after a code change is a new intended execution and gets a new requestKey. Failed attempts and partial outputs are not a successful final result.
 
-- **Push every step you can into deterministic, visible nodes** — `mcp-tool`
-  (graph lookups, a **calculator** that reads the KG and returns a figure),
-  `branch`, `transform`, `format-output`. Each becomes an auditable artifact in
-  the run trace: the customer *sees how the answer was derived* (which data, which
-  rule, the calculation, the validation). Reserve `claude-sdk` **agents** only for
-  the genuine-judgment steps.
-- **Multiple agents are fine — give them a shared workspace.** Set
-  `enableWorkspace: true` on agents that must exchange whole artifacts (e.g. an
-  "interpret/plan" agent hands working to a "cross-check/validate" agent). That
-  demonstrates orchestration a black-box chatbot can't.
-- **The more of the answer that's deterministic + visible, the stronger the
-  pitch** — it showcases BOTH the depth of the data *and* TAG's
-  observability/validatability. A rigid, multi-node, audited workflow is the
-  flagship demo; an agent chat is the flexible open-Q&A companion. Build both.
+Complete authorized implementation and tests without adding an extra approval round merely because this is a conversion. Retain any user-required approval gates and obtain additional authorization only where the actual action requires it.
 
-See `reference/EXAMPLES.md` example 3 for this observable multi-agent shape.
+## Handoff
 
-## Phase 0 — Understand the project
-
-Read the project before touching TAG. Determine:
-- What it does and its **entry points** (CLI, `main`, exported functions, an
-  HTTP server, a pipeline).
-- The discrete **operations** it performs and their inputs/outputs.
-- Which operations **touch the outside world** (files, DBs, APIs, compute).
-- Which operations need **judgment / language / planning** vs which are
-  **deterministic**.
-
-Write a short conversion plan and confirm it with the user before building.
-
-## Phase 1 — Decompose (the important part)
-
-Apply the rubric from `CONCEPTS.md §6` to every operation:
-
-1. **Deterministic** (parse, transform, a fixed API call, routing) →
-   a programmatic node: `transform`, `http-get/post`, `mcp-tool`, `branch`,
-   `join`, `format-output`. No agent.
-2. **External action** (file/db/api/compute) → expose as an **MCP tool**.
-   Then decide: called the same way every time → an `mcp-tool` node; chosen
-   dynamically by reasoning → give it to an **agent** as a capability.
-3. **Needs judgment / language** → a `claude-sdk` **agent**, with a tight
-   prompt and a **small, named** tool set.
-
-Sketch the graph: mostly deterministic nodes preparing/routing data, one or a
-few focused agents at the decision points, observable terminals. Keep **data
-on edges** — the thing the run operates on is `input`, not a constant baked
-into a prompt.
-
-## Phase 2 — Build the MCP tools
-
-Copy the matching template into the project (or a sibling dir):
-
-```bash
-cp -r <plugin>/templates/mcp-server/node   ./tag-mcp     # or .../python
-```
-
-Edit **`tools.mjs`** / **`tools.py`**: replace the example tools with one tool
-per external action you identified in Phase 1. Wrap the project's real
-functions/CLI/endpoints (patterns A/B/C in the template). Name tools like the
-project's own verbs. Keep results as plain text / compact JSON.
-
-**Smoke-test locally** (no bridge) by piping JSON-RPC — see
-`templates/mcp-server/README.md`. Confirm `tools/list` shows your tools and a
-`tools/call` returns what you expect. Do not proceed until this works.
-
-## Phase 3 — Bridge the tools to TAG
-
-```bash
-cd ./tag-mcp
-node <plugin>/scripts/tag.mjs bridge-token --write .bridge.env   # mint token (devId = your user id)
-./run-bridge.sh                                                  # leave running
-```
-
-Confirm with `node <plugin>/scripts/tag.mjs bridge-status` → `connected: true`.
-
-## Phase 4 — Create the capability
-
-```bash
-node <plugin>/scripts/tag.mjs capability:create \
-  --name "My Project Tools" --slug my-project-tools
-```
-
-This registers an `mcp-server` capability whose `urlSource` is the relay +
-your `devId`, so a TAG agent that holds this capability can call your bridged
-tools. Note the printed **capability id**. (Optionally narrow which tools each
-agent sees later via `capabilityToolFilters` — see `NODES.md`.)
-
-**Least privilege — one bridge per agent (recommended).** When a workflow has
-several agents with different tool needs, give each agent its **own** bridge slot
-exposing **only its tools**, rather than one shared bridge carrying every tool.
-Mint a per-agent slot (`--project "<project>-<agent>"`) and create a per-agent
-capability pointed at it, then put **only that capability id** on that agent's
-node. The bridge process is the hard boundary (it runs only that agent's MCP
-server), so a prompt-injected or buggy agent physically cannot reach another
-agent's tools — defense-in-depth above `capabilityToolFilters` (a soft,
-visible-surface filter). See "one bridge per agent" in the plugin `README.md`.
-Default to per-agent when tool needs differ or any tool is sensitive; share a
-bridge only when agents genuinely share one tool set.
-
-## Phase 5 — Author the workflow graph
-
-Write `graph.json` following the plan from Phase 1 and `NODES.md`. For two
-complete, adaptable starting graphs (an interactive chatbot and a deterministic
-lookup) see `reference/EXAMPLES.md`. Principles:
-- **Omit node positions** (auto-layout). Use canonical node types.
-- Deterministic steps as nodes; agents only where needed, each with
-  `capabilityIds: ["<your-cap-id>"]` and a `systemPrompt` that **names the
-  tools** and describes the **structured input** it receives.
-- For an agent that should only use some tools, set
-  `capabilityToolFilters: { "<cap-id>": ["tool_a","tool_b"] }`.
-- If two or more agents must **exchange whole files** (writer → editor,
-  planner → executor), set `enableWorkspace: true` on each of those agents:
-  they share one run-scoped filesystem with built-in `read_file` / `write_file`
-  / `edit_file` / `list_files` / `glob` / `grep` / `move_file` / `delete_file`
-  tools. Use this instead of `memory-*` when passing files/artifacts rather
-  than a single value (`NODES.md` → "Multi-agent shared workspace").
-- `branch`/`transform` expressions: the value is an object — coerce with
-  `$string($)` or reach into a field (`JSONATA.md`).
-- End on an observable terminal (`format-output` / `log` / `chat-response`).
-
-**Pick a project FIRST.** A workflow must belong to a project or it won't be
-visible in the TAG UI (the UI is project-scoped — every list/editor route is
-under `/p/:projectSlug/...`, so a project-less workflow can't be listed or
-opened). Reuse an existing project or create one:
-
-```bash
-node <plugin>/scripts/tag.mjs project:list                       # id · slug · name
-node <plugin>/scripts/tag.mjs project:create --name "My Project"  # → prints a project id
-```
-
-Create the workflow **with `--project`** (slug or id):
-
-```bash
-node <plugin>/scripts/tag.mjs workflow:create --name "My Project" --graph graph.json --project my-project
-# → prints the workflow id ; iterate with:  workflow:save --id <id> --graph graph.json
-```
-
-If you omit `--project`, the CLI still attaches one (a default "TAG Convert"
-project) so the workflow is never orphaned — but prefer an explicit, meaningful
-project so the user finds it where they expect.
-
-## Phase 6 — Test end-to-end (the acceptance test)
-
-With the bridge still running:
-
-```bash
-node <plugin>/scripts/tag.mjs test-run --id <workflow-id> --input '{"...":"..."}'
-```
-
-This streams the live trace: turns, **`tool.invoked` with arguments and
-results**, assistant messages, and the final output. The acceptance test from
-`CONCEPTS.md §7`: **you should be able to read the trace and say exactly what
-happened at every step.** If an agent did something you can't see, or burned
-turns guessing, pull that logic out of the agent into a deterministic node and
-re-run. Iterate `tools.* → workflow:save → test-run` until the trace is clean.
-
-## Phase 7 — Hand off
-
-Summarize for the user: the capability id, the workflow id, the graph shape
-(which steps are deterministic vs agentic and why), how to keep the bridge
-running, and how to re-test. Note anything you deferred (e.g. tools that
-should later become deterministic `mcp-tool` nodes).
-
-## Anti-patterns (do not)
-
-- **One mega-agent that does everything.** Decompose; reserve the agent for
-  the dynamic core. (This is the single most common mistake.)
-- **Baking run data into the workflow.** URLs/ids/paths the run operates on
-  are `input`, not constants.
-- **Giving an agent every tool.** Soft-scope with `capabilityToolFilters`; for a
-  hard boundary give each agent its **own per-agent bridge** exposing only its
-  tools (see Phase 4 + `README.md`). Default to one bridge per agent.
-- **String functions on a bare `$`** in JSONata — coerce/reach in.
-- **Skipping the local smoke test** before bridging, or **skipping the
-  test-run** before handing off.
+Report project, workflow/module/version IDs, capability/bridge identity, inputs, verified outputs, reported usage/cost and remaining dependencies. Clearly distinguish mocked/local tests from actual TAG runs. Leave unrelated deals, workflows, credentials and running bridges intact.

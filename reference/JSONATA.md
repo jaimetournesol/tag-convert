@@ -1,3 +1,5 @@
+> For current API contracts see [CURRENT-API.md](CURRENT-API.md). Discover live node ports/config with `tag_catalog(kind="nodes")` before adapting these examples.
+
 # JSONata in `branch.condition` and `transform.expression`
 
 These two node types evaluate a JSONata expression against the **upstream

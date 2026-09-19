@@ -1,8 +1,18 @@
 {
   "name": "tag-convert",
-  "version": "0.1.0",
-  "description": "Convert any local project into a TAG workflow: scaffold MCP tools from the project, bridge them to TAG, create the capability + workflow, and test it end-to-end.",
-  "author": "Tournesol",
-  "skills": ["./skills/convert-to-tag/SKILL.md"],
-  "commands": ["./commands/tag-convert.md", "./commands/tag-test.md"]
+  "version": "0.2.1",
+  "description": "Create and run TAG workflows, modules and MCP integrations from any agent.",
+  "author": {
+    "name": "Tournesol"
+  },
+  "skills": "./skills/",
+  "commands": "./commands/",
+  "mcpServers": {
+    "tag": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.mjs"
+      ]
+    }
+  }
 }
